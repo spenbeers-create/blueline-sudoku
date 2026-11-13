@@ -17,7 +17,7 @@
   };
   const STRIKES = 3;
   const DAILY_LEVEL = ['extreme', 'easy', 'medium', 'hard', 'hard', 'expert', 'expert']; // Sunday first
-  const VERSION = '1.0.0';
+  const VERSION = '1.0.1';
 
   // ------------------------------------------------------------- storage
   const store = {
@@ -1594,8 +1594,15 @@
   };
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || /[?&]sw\b/.test(location.search))) {
+    // Reload only when an update replaces a running version, never on the first install.
+    const hadController = !!navigator.serviceWorker.controller;
     let reloading = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) return; reloading = true; save(); location.reload(); });
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      save();
+      location.reload();
+    });
     const offer = w => {
       if (!w || !navigator.serviceWorker.controller) return;
       toast('A new version of Blueline is ready.', { label: 'Update', run: () => w.postMessage('skip-waiting') });
