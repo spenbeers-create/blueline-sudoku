@@ -40,7 +40,7 @@
     lobbyNote: st => (st.variant === 'last'
       ? 'Last Word: everyone gets the same letters and types a word on their phone. The last one in loses a life.'
       : 'Pass the fuse: take turns typing a word with the letters. Whoever holds the fuse when it blows loses a life.'),
-    start: code => window.BLMenus.fuse.startRoom(code),
+    start: code => window.BLRooms.start(code),
     unlock: () => window.BLViews.fuse.sound('unlock'),
 
     mount(el, ctx) {
@@ -71,7 +71,7 @@
           const st = parse(cur);
           if (!st || !F.legal(st, move, -1)) return undefined;
           return JSON.stringify(F.apply(st, move, -1));
-        }).then(res => { const n = parse(res); if (n && F.over(n)) ctx.patch({ status: 'over' }).catch(() => {}); }).catch(() => {});
+        }).then(res => { const n = parse(res); if (n && F.over(n)) ctx.finish(F.winner(n)); }).catch(() => {});
       }
 
       const tick = setInterval(() => {

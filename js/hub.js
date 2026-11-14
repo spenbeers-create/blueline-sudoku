@@ -12,7 +12,7 @@
     { id: 'sudoku', name: 'Sudoku', cat: 'Puzzles', blurb: 'Six levels, big grids, Killer and Diagonal.', players: 'Solo or race' },
     { id: 'fuse', cat: 'Words', players: 'Up to 8 · TV mode' },
     { id: 'words', cat: 'Words', players: '2 players' },
-    { id: 'four', cat: 'Board', players: '2 players' },
+    { id: 'four', cat: 'Board', players: '2 players · TV mode' },
     { id: 'chess', cat: 'Board', players: '2 players' },
     { id: 'eights', cat: 'Cards', players: '2 players' },
   ].map(c => Object.assign({ name: GAMES[c.id] && GAMES[c.id].name, blurb: GAMES[c.id] && GAMES[c.id].blurb }, c));
@@ -96,22 +96,13 @@
         BL.toast(`${gameName(r.type)} with ${partnerName()} is finished`, { label: 'See', run: () => openOnline(gid) });
       }
     }
-    for (const [gid, r] of Object.entries(games)) if (r.type === 'chess' && r.status === 'over' && r.winner != null) recordChessOnline(gid, r);
+    for (const [gid, r] of Object.entries(games)) if ((r.type === 'chess' || r.type === 'four') && r.status === 'over' && r.winner != null) recordOnline(r.type, gid, r);
     for (const [gid, r] of Object.entries(games)) if (r.type === 'words' && r.status === 'over' && r.winner != null && window.BLMenus.words) window.BLMenus.words.recordDuel(gid, r, mySeat(r));
     firstLoad = false;
     renderHub();
     renderMenu();
     if (match && match.gid && games[match.gid]) applyRecord(games[match.gid]);
     if (match && match.gid && !games[match.gid] && net === 'ready') { BL.toast('That game was removed.'); closeMatch(); }
-  }
-
-  function recordChessOnline(gid, r) {
-    const st = Object.assign({ bot: {}, partner: { w: 0, l: 0, d: 0 }, counted: {} }, BL.store.get('chessStats', {}));
-    if (st.counted[gid]) return;
-    st.counted[gid] = 1;
-    const k = r.winner === 'draw' ? 'd' : r.winner === mySeat(r) ? 'w' : 'l';
-    st.partner[k] = (st.partner[k] || 0) + 1;
-    BL.store.set('chessStats', st);
   }
 
   function isMyMove(r) {
@@ -328,13 +319,15 @@
     openOnline: gid => openOnline(gid, null, 'menu'),
     startOnline: (type, opts) => startOnline(type, null, opts, 'menu'),
     startBot: opts => startBot(opts),
-    resumeBot: () => resumeBot(),
-    startLocal: type => openLocal(type, 'menu'),
+    resumeBot: type => resumeBot(type),
+    startLocal: (type, opts) => openLocal(type, 'menu', opts),
     resumeLocal: type => resumeLocal(type),
     link: () => openLink(),
     openSolo: (type, cfg) => openSolo(type, cfg),
     startFuse: cfg => startFuse(cfg),
-    openRoom: (code, seat) => openRoom(code, seat),
+    openRoom: (code, seat, type) => openRoom(code, seat, type),
+    openMenu: type => openMenu(type),
+    menuId: () => menuId,
     startTv: type => { if (window.BLTV) window.BLTV.open(type || 'fuse', menuApi); },
     back: () => leave(),
   };
@@ -362,41 +355,46 @@
   $('#menu-look').onclick = () => { const m = window.BLMenus[menuId]; if (m && m.look) m.look(renderMenu); };
   document.addEventListener('bl:show', e => { if (e.detail === 'menu') renderMenu(); });
 
-  // ------------------------------------------------------------- chess bot
-  let chessWorker = null, thinkId = 0;
-  const thinkJobs = new Map();
-  function chessThink(state, level, time) {
-    if (!chessWorker) {
+  // ------------------------------------------------------------------ bots
+  // Chess and Four in a Row bots think in a worker so the board stays smooth.
+  const BOT_AI = { chess: () => window.ChessAI, four: () => window.FourAI };
+  const workers = {}, thinkJobs = new Map();
+  let thinkId = 0;
+  function think(type, state, level, time) {
+    if (!workers[type]) {
       try {
-        chessWorker = new Worker('js/chess-worker.js');
-        chessWorker.onmessage = e => { const j = thinkJobs.get(e.data.id); if (!j) return; thinkJobs.delete(e.data.id); e.data.ok ? j.resolve(e.data.move) : j.reject(new Error(e.data.error)); };
-        chessWorker.onerror = () => { for (const j of thinkJobs.values()) j.reject(new Error('worker')); thinkJobs.clear(); chessWorker = null; };
-      } catch (e) { chessWorker = null; }
+        const w = new Worker(`js/${type}-worker.js`);
+        w.onmessage = e => { const j = thinkJobs.get(e.data.id); if (!j) return; thinkJobs.delete(e.data.id); e.data.ok ? j.resolve(e.data.move) : j.reject(new Error(e.data.error)); };
+        w.onerror = () => { for (const [id, j] of thinkJobs) if (j.type === type) { j.reject(new Error('worker')); thinkJobs.delete(id); } workers[type] = null; };
+        workers[type] = w;
+      } catch (e) { workers[type] = null; }
     }
-    if (!chessWorker) return new Promise((res, rej) => setTimeout(() => { try { res(window.ChessAI.think(state, level, time ? { time } : {})); } catch (e) { rej(e); } }, 30));
-    return new Promise((resolve, reject) => { const id = ++thinkId; thinkJobs.set(id, { resolve, reject }); chessWorker.postMessage({ id, state, level, time }); });
+    const w = workers[type];
+    if (!w) return new Promise((res, rej) => setTimeout(() => { try { res(BOT_AI[type]().think(state, level, time ? { time } : {})); } catch (e) { rej(e); } }, 30));
+    return new Promise((resolve, reject) => { const id = ++thinkId; thinkJobs.set(id, { resolve, reject, type }); w.postMessage({ id, state, level, time }); });
   }
-  const levelName = id => ((window.ChessAI && window.ChessAI.LEVELS.find(l => l.id === id)) || { name: 'Bot' }).name;
+  const levelName = (type, id) => { const ai = BOT_AI[type] && BOT_AI[type](); return ((ai && ai.LEVELS.find(l => l.id === id)) || { name: 'Bot' }).name; };
 
-  function startBot({ level, seat }) {
-    const g = GAMES.chess;
-    buildMatch('chess', { bot: { level, seat: 1 - seat }, seat, from: 'menu', stack: [] });
-    match.state = g.create({});
+  function startBot({ type = 'chess', level, seat, opts }) {
+    const g = GAMES[type];
+    buildMatch(type, { bot: { level, seat: 1 - seat }, seat, from: 'menu', stack: [], botOpts: opts || {} });
+    match.state = g.create(Object.assign({ first: 0 }, opts || {}));
     saveBot();
     renderMatch();
     if (g.turn(match.state) === match.bot.seat) botMove();
   }
-  function resumeBot() {
-    const saved = BL.store.get('chessBot', null);
+  function resumeBot(type = 'chess') {
+    const saved = BL.store.get(type + 'Bot', null);
     if (!saved || !saved.state) return;
-    buildMatch('chess', { bot: { level: saved.level, seat: 1 - saved.seat }, seat: saved.seat, from: 'menu', stack: [] });
+    buildMatch(type, { bot: { level: saved.level, seat: 1 - saved.seat }, seat: saved.seat, from: 'menu', stack: [], botOpts: saved.opts || {} });
     match.state = saved.state;
     renderMatch();
-    if (!GAMES.chess.over(match.state) && GAMES.chess.turn(match.state) === match.bot.seat) botMove();
+    const g = match.game;
+    if (!g.over(match.state) && g.turn(match.state) === match.bot.seat) botMove();
   }
   function saveBot() {
     if (!match || !match.bot) return;
-    BL.store.set('chessBot', { level: match.bot.level, seat: match.seat, state: match.state, at: Date.now() });
+    BL.store.set(match.type + 'Bot', { level: match.bot.level, seat: match.seat, state: match.state, opts: match.botOpts, at: Date.now() });
   }
   async function botMove() {
     const m = match;
@@ -407,8 +405,8 @@
     renderMatch();
     const t0 = Date.now();
     let mv = null;
-    try { mv = await chessThink(before, m.bot.level); } catch (e) { mv = null; }
-    const wait = 450 - (Date.now() - t0);
+    try { mv = await think(m.type, before, m.bot.level); } catch (e) { mv = null; }
+    const wait = (m.type === 'four' ? 650 : 450) - (Date.now() - t0);
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
     m.thinking = false;
     if (match !== m || m.state !== before) return;
@@ -416,22 +414,26 @@
     m.state = g.apply(before, mv, m.bot.seat);
     saveBot();
     renderMatch();
-    if (g.over(m.state)) recordChess('bot', g.winner(m.state));
+    if (g.over(m.state)) recordBot(m.type, m.bot.level, m.seat, g.winner(m.state));
   }
-  function recordChess(kind, winner, gid) {
-    const st = Object.assign({ bot: {}, partner: { w: 0, l: 0, d: 0 }, counted: {} }, BL.store.get('chessStats', {}));
-    const key = winner === 'draw' ? 'd' : winner === (kind === 'bot' ? match.seat : (gid && games[gid] ? mySeat(games[gid]) : 0)) ? 'w' : 'l';
-    if (kind === 'bot') {
-      const lv = match.bot.level;
-      st.bot[lv] = st.bot[lv] || { w: 0, l: 0, d: 0 };
-      st.bot[lv][key]++;
-    } else {
-      if (st.counted[gid]) return;
-      st.counted[gid] = 1;
-      st.partner[key] = (st.partner[key] || 0) + 1;
-    }
-    BL.store.set('chessStats', st);
+  // Win/loss records live per game (chessStats, fourStats).
+  const statsOf = type => Object.assign({ bot: {}, partner: { w: 0, l: 0, d: 0 }, counted: {} }, BL.store.get(type + 'Stats', {}));
+  const resultKey = (winner, seat) => (winner === 'draw' ? 'd' : winner === seat ? 'w' : 'l');
+  function recordBot(type, level, seat, winner) {
+    const st = statsOf(type), k = resultKey(winner, seat);
+    st.bot[level] = st.bot[level] || { w: 0, l: 0, d: 0 };
+    st.bot[level][k]++;
+    BL.store.set(type + 'Stats', st);
   }
+  function recordOnline(type, gid, r) {
+    const st = statsOf(type);
+    if (st.counted[gid]) return;
+    st.counted[gid] = 1;
+    const k = resultKey(r.winner, mySeat(r));
+    st.partner[k] = (st.partner[k] || 0) + 1;
+    BL.store.set(type + 'Stats', st);
+  }
+  const LOCAL_SAVE = ['chess', 'four'];
   function resumeLocal(type) {
     const saved = BL.store.get(type + 'Local', null);
     if (!saved || !saved.state) { openLocal(type, 'menu'); return; }
@@ -531,17 +533,21 @@
 
   // --------------------------------------------------- short fuse: rooms
   // Everyone in a party room watches the same record; moves are transactions on its state.
-  function openRoom(code, seat) {
-    buildMatch('fuse', { room: code, seat, from: 'menu' });
+  function openRoom(code, seat, type = 'fuse') {
+    buildMatch(type, { room: code, seat, from: 'menu' });
     const m = match;
     O.roomHere(code).catch(() => {});
     m.stopRoom = O.watchRoom(code, r => {
       if (match !== m) return;
       if (!r) { BL.toast('The room closed.'); leave(); return; }
-      if (r.status === 'lobby') { leave(); window.BLMenus.fuse.lobby(code, menuApi); return; }
+      if (r.status === 'lobby') { leave(); window.BLRooms.lobby(code, menuApi); return; }
+      const idx = Array.isArray(r.seats) ? r.seats.indexOf(O.me()) : -1;
+      if (idx < 0) { leave(); return; }
       const st = parse(r.state);
       if (!st) return;
+      m.seat = idx;                          // a rematch can swap who goes first
       m.rec = r; m.state = st; m.draft = r.draft || null;
+      m.roomNames = r.seats.map(uid => ((r.players || {})[uid] || {}).name || 'Player');
       renderMatch();
     });
   }
@@ -557,7 +563,7 @@
       });
       if (!res) return move.word != null ? 'late' : '';
       const n = parse(res);
-      if (n && g.over(n)) O.patchRoom(code, { status: 'over' }).catch(() => {});
+      if (n && g.over(n)) window.BLRooms.finish(code, g.winner(n));
     } catch (e) { BL.toast('Couldn’t reach the room. Check your connection.'); }
     return '';
   }
@@ -598,11 +604,12 @@
     const seed = O.code(10);
     if (!opts && swapFrom) {
       const prev = parse(swapFrom.state) || {};
-      opts = { mode: swapFrom.mode, tc: swapFrom.tcSpec || null, len: prev.len, hard: prev.hard, variant: prev.variant, settings: prev.settings };
+      opts = { mode: swapFrom.mode, tc: swapFrom.tcSpec || null, len: prev.len, hard: prev.hard, variant: prev.variant, settings: prev.settings, size: prev.size };
     }
     opts = opts || {};
     const extraOpts = type === 'words' ? { len: opts.len, hard: opts.hard, mode: opts.mode || 'duel', word: opts.word, hint: opts.hint, by: opts.by, guesser: opts.mode === 'custom' ? 1 : null }
-      : type === 'fuse' ? Object.assign({}, opts.settings || {}, { variant: opts.variant, players: [{ name: 'Player 1' }, { name: 'Player 2' }] }) : {};
+      : type === 'fuse' ? Object.assign({}, opts.settings || {}, { variant: opts.variant, players: [{ name: 'Player 1' }, { name: 'Player 2' }] })
+      : type === 'four' ? { size: opts.size } : {};
     const state = g.create(Object.assign({ seed, first: 0, clock: opts.mode === 'live' && opts.tc ? opts.tc : null }, extraOpts));
     const me = O.me();
     let seats;
@@ -625,10 +632,11 @@
   function names() {
     if (!match) return ['', ''];
     if (match.type === 'fuse' && (match.room || match.fuseBots)) return match.state ? match.state.players.map(p => p.name) : [];
+    if (match.room) return match.roomNames || ['Player 1', 'Player 2'];
     if (match.solo) return [myName(), ''];
     if (match.local) return partner ? [myName(), partnerName()] : (match.type === 'chess' ? ['White', 'Black'] : ['Player 1', 'Player 2']);
     const seat = match.seat;
-    if (match.bot) { const n = ['', '']; n[seat] = myName(); n[1 - seat] = `${levelName(match.bot.level)} bot`; return n; }
+    if (match.bot) { const n = ['', '']; n[seat] = myName(); n[1 - seat] = `${levelName(match.type, match.bot.level)} bot`; return n; }
     const n = ['', ''];
     n[seat] = myName() === 'You' ? 'You' : myName();
     n[1 - seat] = partnerName();
@@ -639,7 +647,7 @@
     closeMatch(true);
     const g = GAMES[type];
     match = Object.assign({ type, game: g, view: VIEWS[type], local: false, solo: false, gid: null, seat: 0, state: null, mine: null, theirs: null, rec: null }, extra);
-    $('#p-title').textContent = match.bot ? `${g.name} vs ${levelName(match.bot.level)} bot` : g.name;
+    $('#p-title').textContent = match.bot ? `${g.name} vs ${levelName(type, match.bot.level)} bot` : g.name;
     $('#p-result').hidden = true;
     if (match.from === 'menu' && !(history.state && history.state.s === 'sub2')) { try { history.pushState({ s: 'sub2' }, ''); } catch (e) { /* ignore */ } }
     const ctx = {
@@ -660,7 +668,8 @@
       hint: async () => {
         if (!match || !match.bot) return null;
         const s = match.state;
-        try { const mv = await chessThink(s, 5, 900); return match && match.state === s ? mv : null; } catch (e) { return null; }
+        const chess = match.type === 'chess';
+        try { const mv = await think(match.type, s, chess ? 5 : 4, chess ? 900 : 600); return match && match.state === s ? mv : null; } catch (e) { return null; }
       },
       confirm: (title, text, label, fn) => {
         BL.openSheet(`<h2 id="sheet-title">${esc(title)}</h2><p class="lede">${esc(text)}</p>
@@ -683,10 +692,10 @@
     BL.show('play');
   }
 
-  function openLocal(type, from) {
+  function openLocal(type, from, opts) {
     const g = GAMES[type];
     buildMatch(type, { local: g.kind === 'turns', solo: g.kind === 'race', from: from || (window.BLMenus && window.BLMenus[type] ? 'menu' : null) });
-    match.state = g.create({ seed: Math.random().toString(36).slice(2), first: 0 });
+    match.state = g.create(Object.assign({ seed: Math.random().toString(36).slice(2), first: 0 }, opts || {}));
     if (g.kind === 'race') match.mine = Object.assign(g.progress(), { started: Date.now() });
     renderMatch();
   }
@@ -740,14 +749,14 @@
       m.state = g.apply(m.state, move, actor);
       if (!move.typing && BL.buzz) BL.buzz(8);
       if (m.bot) {
-        if (move.from != null) m.stack.push(before);
+        if (move.from != null || move.col != null) m.stack.push(before);
         saveBot();
         renderMatch();
-        if (g.over(m.state)) recordChess('bot', g.winner(m.state));
+        if (g.over(m.state)) recordBot(m.type, m.bot.level, m.seat, g.winner(m.state));
         else if (g.turn(m.state) === m.bot.seat) botMove();
         return '';
       }
-      if (m.local && m.type === 'chess') BL.store.set('chessLocal', { state: m.state, at: Date.now() });
+      if (m.local && LOCAL_SAVE.includes(m.type)) BL.store.set(m.type + 'Local', { state: m.state, at: Date.now() });
       renderMatch();
       if (!m.local) {
         const pid = partner.pid, gid = m.gid, seat = m.seat;
@@ -799,6 +808,7 @@
     if (match.solo) sub = match.soloCfg && match.soloCfg.kind === 'daily' ? 'Daily word' : match.soloCfg && match.soloCfg.kind === 'link' ? `${s.by || 'A friend'}’s word` : 'Practice';
     else if (match.bot) sub = g.over(s) ? 'Game over' : match.thinking ? 'The bot is thinking…' : g.turn(s) === match.seat ? 'Your move' : 'Bot’s move';
     else if (match.local) sub = g.over(s) ? 'On this phone' : `On this phone · ${n[g.turn(s)]}’s turn`;
+    else if (match.room) sub = `Room ${match.room}${rec && rec.screen ? ' · on the TV' : ''} · ${g.over(s) ? 'Game over' : g.turn(s) === match.seat ? 'Your turn' : `${n[g.turn(s)]}’s turn`}`;
     else {
       const p = partnerOnline();
       const withMe = p && p.game === match.gid;
@@ -814,7 +824,7 @@
     $('#p-sub').classList.toggle('live', !match.local && !match.solo && !!(partnerOnline() && partnerOnline().game === match.gid));
 
     const seats = [0, 1];
-    if (match.solo || match.type === 'chess' || match.type === 'fuse' || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
+    if (match.solo || match.type === 'chess' || match.type === 'fuse' || match.type === 'four' || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
     const label = i => {
       if (match.type === 'chess') return i === 0 ? 'White' : 'Black';
       if (match.type === 'eights') return `${s.hands[i].length} card${s.hands[i].length === 1 ? '' : 's'}`;
@@ -848,6 +858,19 @@
   function renderResult() {
     const m = match, g = m.game, box = $('#p-result');
     if (m.type === 'fuse' && window.BLMenus.fuse && window.BLMenus.fuse.renderResult(box, m)) return;
+    if (m.room) {
+      if (!g.over(m.state)) { box.hidden = true; return; }
+      const n = names(), w = g.winner(m.state), r = m.rec || {};
+      const title = w === 'draw' ? 'It’s a draw' : w === m.seat ? 'You win!' : `${n[w]} wins`;
+      const tally = r.score && r.seats ? r.seats.map(uid => `${((r.players || {})[uid] || {}).name || 'Player'} ${r.score[uid] || 0}`).join(', ') : '';
+      box.hidden = false;
+      box.className = 'p-result';
+      box.innerHTML = `<div><b>${esc(title)}</b><p>${esc(g.summary(m.state, n))}${tally ? ` Score: ${esc(tally)}.` : ''}</p></div>
+        <div class="actions row"><button type="button" class="btn primary" data-a="again">Play again</button><button type="button" class="btn" data-a="menu">Menu</button></div>`;
+      on(box, '[data-a=again]', () => window.BLRooms.rematch(m.room));
+      on(box, '[data-a=menu]', () => { const c = m.room; leave(); window.BLRooms.leave(c, false); });
+      return;
+    }
     if (m.soloCfg && m.soloCfg.result) {
       if (!g.done(m.mine)) { box.hidden = true; return; }
       m.soloCfg.result(box, m);
@@ -899,8 +922,11 @@
       </div>`;
     on(box, '[data-a=again]', () => {
       if (m.type === 'words' && m.state.mode === 'custom' && window.BLMenus.words.make) { window.BLMenus.words.make(menuApi); return; }
-      if (m.bot) startBot({ level: m.bot.level, seat: m.seat });
-      else if (m.local || m.solo) { if (m.type === 'chess') BL.store.set('chessLocal', null); openLocal(m.type, m.from); }
+      if (m.bot) startBot({ type: m.type, level: m.bot.level, seat: m.type === 'four' ? 1 - m.seat : m.seat, opts: m.botOpts });
+      else if (m.local || m.solo) {
+        if (LOCAL_SAVE.includes(m.type)) BL.store.set(m.type + 'Local', null);
+        openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size, first: 1 - (m.state.first || 0) } : undefined);
+      }
       else startOnline(m.type, Object.assign({ gid: m.gid }, m.rec));
     });
     on(box, '[data-a=next]', () => openOnline(m.rec.next));
@@ -939,12 +965,13 @@
     const active = g.kind === 'turns' && !g.over(m.state) && !(m.rec && m.rec.status === 'over');
     const shared = !m.local && !m.solo && !m.bot && !m.room && !m.fuseBots;
     const hasLook = window.BLMenus && window.BLMenus[m.type] && window.BLMenus[m.type].look;
+    const lookLabel = (hasLook && window.BLMenus[m.type].lookLabel) || 'Board and pieces';
     BL.openSheet(`
       <h2 id="sheet-title">${esc(g.name)}</h2>
       <div class="actions">
-        ${hasLook ? '<button type="button" class="btn" data-a="look">Board and pieces</button>' : ''}
+        ${hasLook ? `<button type="button" class="btn" data-a="look">${esc(lookLabel)}</button>` : ''}
         ${active && shared && m.type !== 'chess' ? '<button type="button" class="btn danger" data-a="resign">Resign</button>' : ''}
-        ${active && (m.local || m.fuseBots) ? '<button type="button" class="btn" data-a="restart">Start over</button>' : ''}
+        ${active && (m.local || m.fuseBots || m.bot) ? '<button type="button" class="btn" data-a="restart">Start over</button>' : ''}
         ${shared ? '<button type="button" class="btn" data-a="remove">Remove this game for both of you</button>' : ''}
         ${m.room ? '<button type="button" class="btn" data-a="leaveroom">Leave the room</button>' : ''}
         <button type="button" class="btn ghost" data-a="hub">${m.from === 'menu' ? 'Back to the menu' : 'Back to games'}</button>
@@ -964,7 +991,13 @@
           });
         });
         on(b, '[data-a=look]', () => window.BLMenus[m.type].look(() => { if (match && match.inst.refresh) match.inst.refresh(); }));
-        on(b, '[data-a=restart]', () => { BL.closeSheet(); if (m.fuseBots) { startFuse(m.fuseCfg); return; } if (m.type === 'chess') BL.store.set('chessLocal', null); openLocal(m.type, m.from); });
+        on(b, '[data-a=restart]', () => {
+          BL.closeSheet();
+          if (m.fuseBots) { startFuse(m.fuseCfg); return; }
+          if (m.bot) { startBot({ type: m.type, level: m.bot.level, seat: m.seat, opts: m.botOpts }); return; }
+          if (LOCAL_SAVE.includes(m.type)) BL.store.set(m.type + 'Local', null);
+          openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size } : undefined);
+        });
         on(b, '[data-a=leaveroom]', () => { BL.closeSheet(); const c = m.room; leave(); O.leaveRoom(c, false, false).catch(() => {}); });
         on(b, '[data-a=remove]', () => {
           BL.openSheet(`<h2 id="sheet-title">Remove this game?</h2><p class="lede">It disappears from both phones. This can’t be undone.</p>
@@ -994,8 +1027,7 @@
     const rm = location.hash.match(/^#room-([A-Za-z0-9]{5})$/);
     if (rm) {
       try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* ignore */ }
-      openMenu('fuse');
-      window.BLMenus.fuse.join(rm[1].toUpperCase(), menuApi);
+      window.BLRooms.joinPrompt(rm[1].toUpperCase(), '', menuApi);
       return;
     }
     const wl = location.hash.match(/^#w-([A-Za-z0-9_-]{6,200})$/);

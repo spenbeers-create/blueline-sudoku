@@ -89,7 +89,7 @@
       let code = null;
       const prev = BL.store.get('tvRoom', null);
       if (prev && prev.type === type) { const r = await peek(prev.code); if (r && r.screen === O.me()) code = prev.code; }
-      if (!code) code = await O.createRoom('TV', game.defaults(), true, type);
+      if (!code) code = await O.createRoom('TV', game.defaults(), true, type, game.maxPlayers || 8);
       if (tv !== me) { O.leaveRoom(code, true, true).catch(() => {}); return; }
       tv.code = code;
       BL.store.set('tvRoom', { type, code });
@@ -130,6 +130,8 @@
         info: text => { const el = $('#tv-info'); if (el) el.textContent = text; },
         move: fn => O.roomMove(tv.code, fn),
         patch: fields => O.patchRoom(tv.code, fields),
+        finish: winner => window.BLRooms.finish(tv.code, winner),
+        rematch: () => window.BLRooms.rematch(tv.code),
         playAgain: () => O.patchRoom(tv.code, { status: 'lobby', state: null, draft: null }).catch(() => BL.toast('Couldn’t reach the room.')),
         exit: () => askExit(false),
       });
@@ -158,7 +160,7 @@
           ${tv.qr ? `<div class="tv-qr">${tv.qr}<span>Or point your phone’s camera here</span></div>` : ''}
         </section>
         <section class="tv-side">
-          <h2>Players <small>${players.length} of 8</small></h2>
+          <h2>Players <small>${players.length} of ${g.maxPlayers || 8}</small></h2>
           <div class="tv-plist">${players.length ? players.map(([uid, p], i) => `<div class="tv-pl${here[uid] ? '' : ' away'}" style="--c:${COLORS[i % COLORS.length]}"><i>${esc((p.name || '?')[0].toUpperCase())}</i><b>${esc(p.name || 'Player')}</b></div>`).join('') : '<p class="tv-empty">Waiting for the first player…</p>'}</div>
           <div class="tv-settings">${g.settingsRows(st).map(row => `<div class="tv-row"><span>${esc(row.label)}</span><div class="seg tv-seg" role="radiogroup" aria-label="${esc(row.label)}" data-k="${row.key}">${row.options.map(([v, t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${String(row.value) === String(v)}">${esc(t)}</button>`).join('')}</div></div>`).join('')}</div>
           <p class="tv-note">${esc(g.lobbyNote(st))}</p>

@@ -187,11 +187,11 @@
   // ----------------------------------------------------------- party rooms
   // rooms/{code}: anyone signed in who knows the code can join (2 to 8 players).
   // asScreen: a TV or laptop that shows the game but doesn't play in it.
-  async function createRoom(name, settings, asScreen, game) {
+  async function createRoom(name, settings, asScreen, game, max) {
     await ready();
     let c = code(5);
     for (let i = 0; i < 5 && (await ref(`rooms/${c}`).get()).exists(); i++) c = code(5);
-    const rec = { host: uid, game: game || 'fuse', status: 'lobby', created: TS(), updated: TS(), settings };
+    const rec = { host: uid, game: game || 'fuse', max: max || 8, status: 'lobby', created: TS(), updated: TS(), settings };
     if (asScreen) rec.screen = uid;
     else rec.players = { [uid]: { name, at: TS() } };
     await ref(`rooms/${c}`).set(rec);
@@ -204,7 +204,7 @@
     if (!r) throw Object.assign(new Error('no room'), { code: 'no-room' });
     const mine = r.players && r.players[uid];
     if (!mine && r.status !== 'lobby') throw Object.assign(new Error('started'), { code: 'started' });
-    if (!mine && Object.keys(r.players || {}).length >= 8) throw Object.assign(new Error('full'), { code: 'full' });
+    if (!mine && Object.keys(r.players || {}).length >= (r.max || 8)) throw Object.assign(new Error('full'), { code: 'full' });
     await ref(`rooms/${c}/players/${uid}`).update({ name, at: TS() });
     return r;
   }

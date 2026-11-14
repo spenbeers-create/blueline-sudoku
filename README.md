@@ -10,7 +10,9 @@ both in the app, and take-your-turn when you're not.
   notes, hints that explain the logic, three strikes, a daily puzzle, stats, puzzle codes and live races.
 - **Chess**: full rules; six bot levels (Beginner to Master) with hints and takebacks; live games with a clock or
   take-turns games with your partner; draw offers; board themes and three piece sets.
-- **Four in a Row**: drop discs and line up four.
+- **Four in a Row**: drop discs and line up four. Four bot levels (Easy to Expert) with Undo and Hint, three
+  board sizes, live or take-turns games with your partner, rooms for anyone with a code, warnings where
+  someone can win next, and your own disc colors, board and disc style.
 - **Crazy Eights**: match the suit or number, eights are wild, first to empty their hand wins.
 - **Word Duel**: guess the secret word in 4 to 7 letters. A daily word with streaks and a guess chart, practice,
   hard mode and high-contrast colors. With your partner: duels (fewer guesses wins), live races (first to solve
@@ -20,7 +22,7 @@ both in the app, and take-your-turn when you're not.
   a life back. Two ways to play: Pass the fuse, or Last Word (everyone types at once and the last one in
   loses a life). Play bots (three skill levels), practice alone, challenge your partner, or open a
   party room for up to 8 phones.
-- **TV mode** (Short Fuse for now): open Blueline in a TV's web browser, or on a laptop plugged into the
+- **TV mode** (Short Fuse and Four in a Row): open Blueline in a TV's web browser, or on a laptop plugged into the
   TV, and tap TV mode. The screen shows a room code and QR code, everyone joins on their phones, and the
   letters, lives and live typing play out on the big screen.
 
@@ -53,6 +55,7 @@ node tools/test-games.js         # Chess (perft), Four in a Row, Crazy Eights
 node tools/test-chess-ai.js      # the chess bot: perft, legal moves, mates, strength
 node tools/test-words.js         # Word Duel
 node tools/test-fuse.js          # Short Fuse
+node tools/test-four.js          # Four in a Row sizes and bot levels
 ```
 
 Word lists come from SCOWL via the `wordlist-english` package; the scripts in `tools/`

@@ -69,10 +69,10 @@
         <button type="button" class="btn" data-a="menu">Menu</button>
       </div>`;
     on(box, '[data-a=again]', () => {
-      if (m.room) { O.patchRoom(m.room, { status: 'lobby', state: null, draft: null }).catch(() => BL.toast('Couldn’t reach the room.')); return; }
+      if (m.room) { R().toLobby(m.room); return; }
       api.startFuse(m.fuseCfg);
     });
-    on(box, '[data-a=menu]', () => { if (m.room) leaveRoom(m.room, false); api.back(); });
+    on(box, '[data-a=menu]', () => { if (m.room) R().leave(m.room, false); api.back(); });
     return true;
   }
 
@@ -88,115 +88,20 @@
   }
 
   // ---------------------------------------------------------- party rooms
-  async function createRoom() {
-    try {
-      await O.ready();
-      BL.openSheet('<h2 id="sheet-title">Making a room…</h2><div class="status-line"><span class="spinner"></span>One moment</div>', { locked: true });
-      const code = await O.createRoom(myName(), settingsFrom(prefs()));
-      lobby(code);
-    } catch (e) { BL.openSheet(`<h2 id="sheet-title">Couldn’t make a room</h2><p class="status-line err">${esc(roomErr(e))}</p><div class="actions"><button type="button" class="btn" data-a="x">Close</button></div>`, { onMount: b => on(b, '[data-a=x]', () => BL.closeSheet()) }); }
-  }
-  function roomErr(e) {
-    if (e && e.code === 'no-room') return 'No room with that code. Check it and try again.';
-    if (e && e.code === 'started') return 'That game already started. Ask them to send a new room after this one.';
-    if (e && e.code === 'full') return 'That room is full (8 players).';
-    if (e && e.code === 'no-config') return 'Online play isn’t set up yet.';
-    if (e && /permission/i.test(e.message || '')) return 'Party rooms need one more database rule. Add the “rooms” rule in Firebase, then try again.';
-    return 'Couldn’t reach the server. Check your connection.';
-  }
-  function joinPrompt(prefill, err) {
-    BL.openSheet(`
-      <h2 id="sheet-title">Join a room</h2>
-      <p class="lede">Type the 5-letter room code from the TV or your friend’s phone.</p>
-      <input class="input code" id="rm-code" maxlength="5" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="K7P2Q" value="${esc(prefill || '')}" aria-label="Room code">
-      ${err ? `<p class="status-line err">${esc(err)}</p>` : ''}
-      <label class="field"><span>Your name</span><input class="input" id="rm-name" maxlength="20" value="${esc(BL.settings.name || '')}" placeholder="Your name"></label>
-      <div class="actions"><button type="button" class="btn primary big" data-a="go">Join</button><button type="button" class="btn ghost" data-a="x">Cancel</button></div>`, {
-      onMount: b => {
-        const go = async () => {
-          const c = $('#rm-code', b).value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-          const n = $('#rm-name', b).value.trim().slice(0, 20);
-          if (n) { BL.settings.name = n; BL.saveSettings(); }
-          if (c.length !== 5) { joinPrompt(c, 'Room codes have 5 letters and numbers.'); return; }
-          try { await O.joinRoom(c, myName()); lobby(c); } catch (e) { joinPrompt(c, roomErr(e)); }
-        };
-        on(b, '[data-a=go]', go);
-        $('#rm-code', b).addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
-        on(b, '[data-a=x]', () => BL.closeSheet());
-      },
-    });
-  }
-
-  // The lobby listener can fire before watchRoom returns, so each lobby gets a token
-  // and a listener that arrives after its lobby ended is switched straight off.
-  let stopLobby = null, lobbyToken = null;
-  function endLobby() {
-    lobbyToken = null;
-    if (stopLobby) { stopLobby(); stopLobby = null; }
-  }
-  function leaveRoom(code, lobbyPhase) {
-    endLobby();
-    O.ready().then(() => O.leaveRoom(code, false, lobbyPhase)).catch(() => {});
-  }
-  function lobby(code) {
-    endLobby();
-    const token = lobbyToken = {};
-    O.roomHere(code).catch(() => {});
-    const paint = r => {
-      if (lobbyToken !== token) return;
-      if (!r) { BL.closeSheet(); BL.toast('The room closed.'); endLobby(); return; }
-      const me = O.me();
-      if (r.status === 'playing' && Array.isArray(r.seats) && r.seats.includes(me)) {
-        endLobby();
-        BL.closeSheet();
-        api.openRoom(code, r.seats.indexOf(me));
-        return;
-      }
-      const players = Object.entries(r.players || {});
-      const st = r.settings || {}, need = r.screen ? 1 : 2;
-      BL.openSheet(`
-        <h2 id="sheet-title">Room ${esc(code)}</h2>
-        <p class="lede">${esc((VARIANTS[st.variant] || VARIANTS.pass).name)} · ${st.lives || 3} ${(st.lives || 3) === 1 ? 'life' : 'lives'} · ${esc(st.difficulty || 'normal')} letters${r.screen ? ' · on the TV' : ''}</p>
-        <div class="room-players">${players.map(([uid, p]) => `<span class="room-p${uid === me ? ' me' : ''}"><i>${esc((p.name || '?')[0].toUpperCase())}</i>${esc(p.name || 'Player')}${uid === me ? ' (you)' : ''}</span>`).join('') || '<span class="muted">Nobody yet</span>'}</div>
-        <div class="actions row"><button type="button" class="btn" data-a="share">Invite</button><button type="button" class="btn" data-a="copy">Copy code</button></div>
-        <div class="actions">
-          <button type="button" class="btn primary big" data-a="start" ${players.length < need ? 'disabled' : ''}>${players.length < need ? 'Waiting for players…' : `Start with ${players.length} player${players.length === 1 ? '' : 's'}`}</button>
-          <button type="button" class="btn ghost" data-a="leave">Leave room</button>
-        </div>
-        <p class="small muted">${r.screen ? 'Watch the TV. Anyone can start, from here or on the TV.' : 'Anyone in the room can start once 2 or more have joined.'}</p>`, {
-        locked: true,
-        onMount: b => {
-          on(b, '[data-a=share]', () => BL.shareText(`Join my Short Fuse room in Blueline: ${code}\n${appUrl()}#room-${code}`));
-          on(b, '[data-a=copy]', () => BL.copyText(code));
-          on(b, '[data-a=start]', () => startRoom(code));
-          on(b, '[data-a=leave]', () => { leaveRoom(code, true); BL.closeSheet(); });
-        },
-      });
-    };
-    O.ready().then(() => {
-      const off = O.watchRoom(code, paint);
-      if (lobbyToken === token) stopLobby = off; else off();
-    }).catch(e => BL.toast(roomErr(e)));
-  }
-  // Anyone in the room (or the TV) can start it.
-  async function startRoom(code) {
-    try {
-      await O.updateRoom(code, r => {
-        if (r.status !== 'lobby') return undefined;
-        const entries = Object.entries(r.players || {});
-        if (entries.length < (r.screen ? 1 : 2)) return undefined;
-        entries.sort(() => Math.random() - 0.5);
-        const st = r.settings || {};
-        let s = F.create({ seed: O.code(8), players: entries.map(([, p]) => ({ name: p.name || 'Player' })), lives: st.lives, maxLives: st.maxLives, difficulty: st.difficulty, minFuse: st.minFuse, limit: st.limit, variant: st.variant });
-        s = F.apply(s, { start: true, at: O.now() }, 0);
-        r.seats = entries.map(([uid]) => uid);
-        r.state = JSON.stringify(s);
-        r.status = 'playing';
-        r.draft = null;
-        return r;
-      });
-    } catch (e) { BL.toast(roomErr(e)); }
-  }
+  const R = () => window.BLRooms;
+  R().register('fuse', {
+    title: 'Short Fuse', maxPlayers: 8,
+    minPlayers: r => (r.screen ? 1 : 2),
+    describe: st => `${(VARIANTS[st.variant] || VARIANTS.pass).name} · ${st.lives || 3} ${(st.lives || 3) === 1 ? 'life' : 'lives'} · ${st.difficulty || 'normal'} letters`,
+    // Seats are shuffled so a different person starts each game.
+    start(r, entries) {
+      const order = entries.slice().sort(() => Math.random() - 0.5), st = r.settings || {};
+      let s = F.create({ seed: O.code(8), players: order.map(([, p]) => ({ name: p.name || 'Player' })), lives: st.lives, maxLives: st.maxLives, difficulty: st.difficulty, minFuse: st.minFuse, limit: st.limit, variant: st.variant });
+      s = F.apply(s, { start: true, at: O.now() }, 0);
+      r.seats = order.map(([uid]) => uid);
+      r.state = JSON.stringify(s);
+    },
+  });
 
   function howTo() {
     BL.openSheet(`
@@ -265,8 +170,8 @@
     segH('fm-lives', 'lives', true); segH('fm-diff', 'difficulty'); segH('fm-speed', 'speed');
     $('#fm-sound', el).onchange = e => { const q = prefs(); q.sound = e.target.checked; savePrefs(q); };
     on(el, '#fm-how', howTo);
-    on(el, '#fm-create', createRoom);
-    on(el, '#fm-join', () => joinPrompt(''));
+    on(el, '#fm-create', () => R().create('fuse', settingsFrom(prefs()), api));
+    on(el, '#fm-join', () => R().joinPrompt('', '', api));
     on(el, '#fm-tv', () => api.startTv());
     on(el, '#fm-bots-go', () => localGame(true));
     on(el, '#fm-solo', () => localGame(false));
@@ -277,8 +182,8 @@
     title: 'Short Fuse',
     render(el, a) { api = a; render(el); },
     renderResult(box, m) { return renderResult(box, m); },
-    lobby(code, a) { api = a; lobby(code); },
-    join(code, a) { api = a; joinPrompt(code); },
-    startRoom, settingsFrom, prefs, VARIANTS,
+    lobby(code, a) { api = a; R().lobby(code, a); },
+    join(code, a) { api = a; R().joinPrompt(code, '', a); },
+    startRoom: code => R().start(code), settingsFrom, prefs, VARIANTS,
   };
 })();
