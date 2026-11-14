@@ -17,7 +17,7 @@
   };
   const STRIKES = 3;
   const DAILY_LEVEL = ['extreme', 'easy', 'medium', 'hard', 'hard', 'expert', 'expert']; // Sunday first
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
 
   // ------------------------------------------------------------- storage
   const store = {
@@ -198,7 +198,7 @@
 
   // ------------------------------------------------------------- screens
   // Screens: hub (all games), home (Sudoku menu), game (Sudoku board), play (two-player games).
-  const SCREENS = ['hub', 'home', 'game', 'play'];
+  const SCREENS = ['hub', 'home', 'game', 'play', 'menu'];
   function show(which) {
     for (const id of SCREENS) { const el = $('#' + id); if (el) el.hidden = id !== which; }
     if (which === 'home') renderHome();
@@ -206,7 +206,7 @@
       if (!history.state || history.state.s !== 'game') { try { history.pushState({ s: 'game' }, ''); } catch (e) { /* ignore */ } }
       layoutBoard();
     }
-    if ((which === 'home' || which === 'play') && (!history.state || !history.state.s)) { try { history.pushState({ s: 'sub' }, ''); } catch (e) { /* ignore */ } }
+    if ((which === 'home' || which === 'play' || which === 'menu') && (!history.state || !history.state.s)) { try { history.pushState({ s: 'sub' }, ''); } catch (e) { /* ignore */ } }
     document.dispatchEvent(new CustomEvent('bl:show', { detail: which }));
   }
   function toHub() {
@@ -234,7 +234,7 @@
       return;
     }
     if (!$('#play').hidden) { document.dispatchEvent(new Event('bl:back')); return; }
-    if (!$('#home').hidden) show('hub');
+    if (!$('#home').hidden || !$('#menu').hidden) show('hub');
   });
 
   // ---------------------------------------------------------------- board
@@ -1675,5 +1675,6 @@
   window.BL = {
     openSheet, closeSheet, sheetOpen, toast, shareText, copyText, esc, fmt, settings, saveSettings, store,
     show, toHub, openSettings, buzz, boot,
+    popQuiet: () => { ignorePop = true; history.back(); },
   };
 })();

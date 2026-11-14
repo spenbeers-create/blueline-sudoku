@@ -165,11 +165,30 @@
 
   const sameMove = (a, m) => a.from === m.from && a.to === m.to && (a.promo || '') === (m.promo || '');
 
+  // Can this side still deliver mate? (Used when the other side runs out of time.)
+  function canMate(b, white) {
+    const mine = b.split('').filter(ch => ch !== '.' && (ch === ch.toUpperCase()) === white && ch.toLowerCase() !== 'k');
+    if (!mine.length) return false;
+    if (mine.length === 1 && 'nb'.includes(mine[0].toLowerCase())) return false;
+    return true;
+  }
+  // Time left for `side`, counting the clock that is running now.
+  function clockLeft(s, side, now) {
+    if (!s.clock) return null;
+    const c = s.clock;
+    return c.ms[side] - (c.running && side === s.turn && s.winner == null ? Math.max(0, now - c.last) : 0);
+  }
+
   const logic = {
     id: 'chess', name: 'Chess', category: 'board', kind: 'turns', local: true,
     blurb: 'The classic. Full rules, castling and all.',
-    create() {
-      const s = { board: START, turn: 0, castling: 'KQkq', ep: -1, half: 0, full: 1, history: [], seen: {}, last: null, check: false, result: null, winner: null, captured: '' };
+    // opts.clock: { minutes, increment } for a timed game.
+    create(opts = {}) {
+      const s = { board: START, turn: 0, castling: 'KQkq', ep: -1, half: 0, full: 1, history: [], moves: [], seen: {}, last: null, check: false, result: null, winner: null, captured: '', offer: null, clock: null };
+      if (opts.clock && opts.clock.minutes) {
+        const ms = Math.round(opts.clock.minutes * 60000);
+        s.clock = { ms: [ms, ms], inc: (opts.clock.increment || 0) * 1000, last: 0, running: false };
+      }
       s.seen[posKey(s)] = 1;
       return s;
     },
@@ -177,12 +196,36 @@
     over: s => s.winner != null,
     winner: s => s.winner,
     legalMoves,
+    clockLeft,
     movesFrom(s, from) { return legalMoves(s).filter(m => m.from === from); },
+    // Moves: {from,to,promo,at}, {resign}, {offer}, {accept}, {decline}, {flag,at}
     legal(s, m, p) {
-      if (s.winner != null || p !== s.turn || !m) return false;
+      if (s.winner != null || !m) return false;
+      if (m.resign) return p === 0 || p === 1;
+      if (m.offer) return (p === 0 || p === 1) && s.offer == null && (s.moves || []).length >= 2;
+      if (m.accept || m.decline) return s.offer === 1 - p;
+      if (m.flag) return !!(s.clock && s.clock.running && typeof m.at === 'number' && clockLeft(s, s.turn, m.at) <= 0);
+      if (p !== s.turn) return false;
+      if (s.clock && s.clock.running && typeof m.at === 'number' && clockLeft(s, s.turn, m.at) <= 0) return false;
       return legalMoves(s).some(o => sameMove(o, m));
     },
-    apply(s, m) {
+    apply(s, m, p) {
+      if (m.resign || m.offer || m.accept || m.decline || m.flag) {
+        const n = JSON.parse(JSON.stringify(s));
+        if (m.resign) { n.winner = 1 - p; n.result = 'resign'; }
+        else if (m.offer) n.offer = p;
+        else if (m.decline) n.offer = null;
+        else if (m.accept) { n.winner = 'draw'; n.result = 'agreement'; n.offer = null; }
+        else if (m.flag) {
+          const loser = s.turn;
+          n.clock.ms[loser] = 0;
+          n.clock.running = false;
+          const otherCanMate = canMate(s.board, loser === 1);
+          n.winner = otherCanMate ? 1 - loser : 'draw';
+          n.result = otherCanMate ? 'time' : 'time-draw';
+        }
+        return n;
+      }
       const all = legalMoves(s);
       const mv = all.find(o => sameMove(o, m));
       const piece = s.board[mv.from];
@@ -191,9 +234,18 @@
         board: play(s, mv), turn: 1 - s.turn, castling: s.castling, ep: -1,
         half: piece.toLowerCase() === 'p' || mv.cap ? 0 : s.half + 1,
         full: s.full + (s.turn === 1 ? 1 : 0), history: s.history.slice(), seen: Object.assign({}, s.seen),
+        moves: (s.moves || []).concat({ from: mv.from, to: mv.to, promo: mv.promo || '' }),
         last: { from: mv.from, to: mv.to }, check: false, result: null, winner: null,
         captured: s.captured + (capturedPiece !== '.' ? capturedPiece : ''),
+        offer: s.offer === 1 - s.turn ? null : s.offer,
+        clock: s.clock ? JSON.parse(JSON.stringify(s.clock)) : null,
       };
+      if (n.clock && typeof m.at === 'number') {
+        const c = n.clock;
+        if (c.running) { c.ms[s.turn] = Math.max(0, c.ms[s.turn] - Math.max(0, m.at - c.last)) + c.inc; }
+        c.last = m.at;
+        if (n.moves.length >= 2) c.running = true;
+      }
       if (mv.double) n.ep = (mv.from + mv.to) / 2;
       const strip = (str, chars) => str.split('').filter(ch => !chars.includes(ch)).join('');
       if (piece === 'K') n.castling = strip(n.castling, 'KQ');
@@ -205,9 +257,11 @@
       return n;
     },
     summary(s, names) {
-      const by = { checkmate: 'Checkmate', stalemate: 'Stalemate', fifty: '50 moves without a capture or pawn move', repetition: 'Same position three times', material: 'Not enough pieces left to checkmate' };
+      const by = { checkmate: 'Checkmate', stalemate: 'Stalemate', fifty: '50 moves without a capture or pawn move', repetition: 'Same position three times', material: 'Not enough pieces left to checkmate', agreement: 'Draw agreed', 'time-draw': 'Out of time, but there’s nothing left to checkmate with' };
       if (s.result === 'checkmate') return `Checkmate. ${names[s.winner]} wins.`;
-      if (s.winner === 'draw') return `${by[s.result]}. It’s a draw.`;
+      if (s.result === 'resign') return `${names[1 - s.winner]} resigned.`;
+      if (s.result === 'time') return `${names[1 - s.winner]} ran out of time.`;
+      if (s.winner === 'draw') return `${by[s.result] || 'Draw'}. It’s a draw.`;
       return `${names[s.turn]} to move${s.check ? ', in check' : ''}`;
     },
     squareName: name,
