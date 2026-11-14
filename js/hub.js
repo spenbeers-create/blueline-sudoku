@@ -84,7 +84,10 @@
       if (prev === undefined) {
         const live = (GAMES[r.type] && GAMES[r.type].live) || r.mode === 'live';
         const what = r.mode === 'live' ? `live ${gameName(r.type)}${r.tc ? ` (${r.tc})` : ''}` : gameName(r.type);
-        BL.toast(live ? `${partnerName()} wants to play ${what} now` : `${partnerName()} started ${what}`, { label: live ? 'Join' : 'Open', run: () => openOnline(gid) });
+        const msg = r.type === 'words' && r.mode === 'custom' ? `${partnerName()} sent you a word to guess`
+          : r.type === 'words' && r.mode === 'live' ? `${partnerName()} wants a Word Duel race now`
+          : live ? `${partnerName()} wants to play ${what} now` : r.type === 'words' ? `${partnerName()} challenged you to Word Duel` : `${partnerName()} started ${what}`;
+        BL.toast(msg, { label: live ? 'Join' : 'Open', run: () => openOnline(gid) });
         continue;
       }
       if (r.status === 'active' && isMyMove(r)) {
@@ -94,6 +97,7 @@
       }
     }
     for (const [gid, r] of Object.entries(games)) if (r.type === 'chess' && r.status === 'over' && r.winner != null) recordChessOnline(gid, r);
+    for (const [gid, r] of Object.entries(games)) if (r.type === 'words' && r.status === 'over' && r.winner != null && window.BLMenus.words) window.BLMenus.words.recordDuel(gid, r, mySeat(r));
     firstLoad = false;
     renderHub();
     renderMenu();
@@ -150,7 +154,8 @@
     const row = ([gid, r], label, cls = '') => `<button type="button" class="turn-row ${cls}" data-gid="${gid}"><span class="gi gi-${r.type}" aria-hidden="true"></span><span><b>${esc(gameName(r.type))}</b><small>${esc(label)}</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>`;
     let lists = '';
     const modeTag = r => (r.mode === 'live' ? `Live${r.tc ? ' ' + r.tc : ''} · ` : '');
-    if (mine.length) lists += `<section class="turns"><h2>Your turn</h2>${mine.map(e => row(e, e[1].kind === 'race' ? `${partnerName()} challenged you` : `${modeTag(e[1])}Your move against ${partnerName()}`, 'hot')).join('')}</section>`;
+    const raceLabel = r => (r.type === 'words' && r.mode === 'custom' ? `${partnerName()} sent you a word` : r.mode === 'live' ? `${partnerName()} wants to race` : `${partnerName()} challenged you`);
+    if (mine.length) lists += `<section class="turns"><h2>Your turn</h2>${mine.map(e => row(e, e[1].kind === 'race' ? raceLabel(e[1]) : `${modeTag(e[1])}Your move against ${partnerName()}`, 'hot')).join('')}</section>`;
     if (theirs.length) lists += `<section class="turns"><h2>Waiting on ${esc(partnerName())}</h2>${theirs.map(e => row(e, e[1].kind === 'race' ? 'You’re done. Waiting for their turn' : `${partnerName()}’s move`)).join('')}</section>`;
     if (done.length) lists += `<section class="turns"><h2>Recent</h2>${done.map(e => row(e, resultText(e[1]))).join('')}</section>`;
     $('#hub-lists').innerHTML = lists;
@@ -327,7 +332,17 @@
     startLocal: type => openLocal(type, 'menu'),
     resumeLocal: type => resumeLocal(type),
     link: () => openLink(),
+    openSolo: (type, cfg) => openSolo(type, cfg),
+    back: () => leave(),
   };
+  function openSolo(type, cfg) {
+    const g = GAMES[type];
+    buildMatch(type, { solo: true, from: 'menu', soloCfg: cfg });
+    match.state = cfg.state;
+    match.mine = cfg.prog ? Object.assign({}, cfg.prog) : g.progress();
+    if (!match.mine.started) match.mine.started = Date.now();
+    renderMatch();
+  }
   function openMenu(id) {
     menuId = id;
     const menu = window.BLMenus[id];
@@ -454,9 +469,15 @@
   async function startOnline(type, swapFrom, opts, from) {
     if (!partner) { openLink(); return; }
     const g = GAMES[type];
+    if (type === 'words') { try { await g.load(); } catch (e) { BL.toast('The word lists didn’t load. Check your connection.'); return; } }
     const seed = O.code(10);
-    opts = opts || (swapFrom ? { mode: swapFrom.mode, tc: swapFrom.tcSpec || null } : {});
-    const state = g.create({ seed, first: 0, clock: opts.mode === 'live' && opts.tc ? opts.tc : null });
+    if (!opts && swapFrom) {
+      const prev = parse(swapFrom.state) || {};
+      opts = { mode: swapFrom.mode, tc: swapFrom.tcSpec || null, len: prev.len, hard: prev.hard };
+    }
+    opts = opts || {};
+    const extraOpts = type === 'words' ? { len: opts.len, hard: opts.hard, mode: opts.mode || 'duel', word: opts.word, hint: opts.hint, by: opts.by, guesser: opts.mode === 'custom' ? 1 : null } : {};
+    const state = g.create(Object.assign({ seed, first: 0, clock: opts.mode === 'live' && opts.tc ? opts.tc : null }, extraOpts));
     const me = O.me();
     let seats;
     if (swapFrom && swapFrom.seats) seats = { 0: swapFrom.seats[1], 1: swapFrom.seats[0] };
@@ -466,6 +487,7 @@
     if (opts.mode) rec.mode = opts.mode;
     if (opts.tc) { rec.tc = `${opts.tc.minutes}+${opts.tc.increment}`; rec.tcSpec = opts.tc; }
     if (g.kind === 'race') rec.prog = { 0: JSON.stringify(g.progress()), 1: JSON.stringify(g.progress()) };
+    if (type === 'words' && opts.mode === 'custom') rec.prog[0] = JSON.stringify(Object.assign(g.progress(), { done: true }));
     try {
       const gid = await O.createGame(partner.pid, rec);
       if (swapFrom && swapFrom.gid) O.patch(partner.pid, swapFrom.gid, { next: gid }).catch(() => {});
@@ -495,8 +517,12 @@
     if (match.from === 'menu') { try { history.pushState({ s: 'sub2' }, ''); } catch (e) { /* ignore */ } }
     const ctx = {
       local: match.local, solo: match.solo, toast: BL.toast, send: submit,
-      mode: match.bot ? 'bot' : match.local ? 'local' : 'online',
+      mode: match.bot ? 'bot' : match.local ? 'local' : match.solo ? 'solo' : 'online',
       thinking: () => !!(match && match.thinking),
+      startLive: async () => {
+        if (!match || !match.gid || !partner) return;
+        await O.update(partner.pid, match.gid, rec => { if (rec.startAt || rec.status !== 'active') return undefined; rec.startAt = O.now() + 3500; return rec; }).catch(() => BL.toast('Couldn’t start the race. Check your connection.'));
+      },
       canTakeback: () => !!(match && match.bot && match.stack && match.stack.length && !match.thinking),
       takeback: () => {
         if (!match || !match.bot || !match.stack.length || match.thinking) return;
@@ -539,6 +565,7 @@
     buildMatch(rec.type, { gid, seat: mySeat(rec), from: from || null });
     O.here(partner.pid, gid).catch(() => {});
     applyRecord(rec);
+    if (rec.type === 'words' && !GAMES.words.ready()) GAMES.words.load().then(() => { if (match && match.gid === gid) renderMatch(); }).catch(() => {});
   }
 
   function applyRecord(rec) {
@@ -557,12 +584,10 @@
       match.theirs = parse(prog[1 - match.seat]) || g.progress();
       if (!match.mine.started && !match.mine.done) {
         match.mine.started = Date.now();
-        O.setProgress(partner.pid, match.gid, match.seat, match.mine).catch(() => {});
+        O.setProgress(partner.pid, match.gid, match.seat, match.mine, true).catch(() => {});
       }
-      if (rec.status === 'active' && g.done(match.mine) && g.done(match.theirs)) {
-        const w = match.seat === 0 ? g.result(s, match.mine, match.theirs) : g.result(s, match.theirs, match.mine);
-        O.patch(partner.pid, match.gid, { status: 'over', winner: w }).catch(() => {});
-      }
+      const w = match.seat === 0 ? g.result(s, match.mine, match.theirs) : g.result(s, match.theirs, match.mine);
+      if (rec.status === 'active' && w != null) O.patch(partner.pid, match.gid, { status: 'over', winner: w }).catch(() => {});
     }
     renderMatch();
   }
@@ -608,10 +633,13 @@
       return '';
     }
     // races
+    if (m.rec && m.rec.status === 'over') return 'This one’s already decided.';
     const err = g.check(m.state, m.mine, move);
     if (err) return err;
     const started = m.mine.started || Date.now();
-    m.mine = Object.assign(g.advance(m.state, m.mine, Object.assign({}, move, { time: Date.now() - started })), { started });
+    m.mine = Object.assign(g.advance(m.state, m.mine, Object.assign({}, move, { time: move.time != null ? move.time : Date.now() - started })), { started });
+    if (m.soloCfg) { try { m.soloCfg.save(m.mine); } catch (e) { /* storage full */ } }
+    if (m.soloCfg && g.done(m.mine)) m.soloCfg.done(m);
     renderMatch();
     if (!m.solo && partner) {
       try {
@@ -626,13 +654,15 @@
     if (!match || $('#play').hidden) return;
     const g = match.game, s = match.state, n = names(), rec = match.rec;
     let sub = '';
-    if (match.solo) sub = 'Practice';
+    if (match.solo) sub = match.soloCfg && match.soloCfg.kind === 'daily' ? 'Daily word' : match.soloCfg && match.soloCfg.kind === 'link' ? `${s.by || 'A friend'}’s word` : 'Practice';
     else if (match.bot) sub = g.over(s) ? 'Game over' : match.thinking ? 'The bot is thinking…' : g.turn(s) === match.seat ? 'Your move' : 'Bot’s move';
     else if (match.local) sub = g.over(s) ? 'On this phone' : `On this phone · ${n[g.turn(s)]}’s turn`;
     else {
       const p = partnerOnline();
       const withMe = p && p.game === match.gid;
       if (rec && rec.status === 'over') sub = resultText(rec);
+      else if (match.type === 'words' && s.mode === 'custom') sub = s.guesser === match.seat ? `${partnerName()}’s word` : `${partnerName()} is guessing your word`;
+      else if (match.type === 'words' && s.mode === 'live') sub = rec && rec.startAt ? 'Live race' : 'Live race. Start when you’re both here';
       else if (g.kind === 'race') sub = g.done(match.mine) ? `Waiting for ${partnerName()}` : 'Same word for both of you';
       else if (match.type === 'fuse' && !s.started) sub = 'Live game. Start when you’re both here';
       else sub = (rec && rec.mode === 'live' ? `Live ${rec.tc || ''} · ` : rec && rec.mode === 'turns' ? 'Take turns · ' : '') + (s.turn === match.seat ? 'Your turn' : `${partnerName()}’s turn`);
@@ -642,7 +672,7 @@
     $('#p-sub').classList.toggle('live', !match.local && !match.solo && !!(partnerOnline() && partnerOnline().game === match.gid));
 
     const seats = [0, 1];
-    if (match.solo || match.type === 'chess') { $('#p-players').innerHTML = ''; return; }
+    if (match.solo || match.type === 'chess' || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
     const label = i => {
       if (match.type === 'chess') return i === 0 ? 'White' : 'Black';
       if (match.type === 'eights') return `${s.hands[i].length} card${s.hands[i].length === 1 ? '' : 's'}`;
@@ -665,7 +695,7 @@
       snap = { state: s, viewer, canAct: !over && (match.local || g.turn(s) === match.seat), draft: match.draft };
     } else {
       const over = match.solo ? g.done(match.mine) : !!(match.rec && match.rec.status === 'over');
-      snap = { state: s, viewer: match.seat, mine: match.mine, theirs: match.solo ? undefined : match.theirs, over };
+      snap = { state: s, viewer: match.seat, mine: match.mine, theirs: match.solo ? undefined : match.theirs, over, startAt: match.rec && match.rec.startAt };
     }
     match.inst.render(snap);
     renderPlayHead();
@@ -674,6 +704,11 @@
 
   function renderResult() {
     const m = match, g = m.game, box = $('#p-result');
+    if (m.soloCfg && m.soloCfg.result) {
+      if (!g.done(m.mine)) { box.hidden = true; return; }
+      m.soloCfg.result(box, m);
+      return;
+    }
     let over = false, title = '', text = '';
     const n = names();
     if (g.kind === 'turns') {
@@ -695,8 +730,12 @@
       if (over) {
         const w = m.rec.winner;
         title = w === 'draw' ? 'It’s a draw' : w === m.seat ? 'You win' : `${partnerName()} wins`;
-        const gs = p => (p.solved ? `${p.guesses.length} guess${p.guesses.length === 1 ? '' : 'es'}` : 'missed');
-        text = `The word was ${m.state.word.toUpperCase()}. You: ${gs(m.mine)}. ${partnerName()}: ${gs(m.theirs)}.`;
+        const gs = p => (p.solved ? `${p.guesses.length} guess${p.guesses.length === 1 ? '' : 'es'}` : p.done ? 'missed' : 'didn’t finish');
+        if (m.state.mode === 'custom') {
+          const guesser = m.state.guesser === m.seat ? m.mine : m.theirs;
+          title = m.state.guesser === m.seat ? (guesser.solved ? 'You got it' : 'Not this time') : (guesser.solved ? `${partnerName()} got it` : `${partnerName()} couldn’t get it`);
+          text = `The word was ${m.state.word.toUpperCase()}.${guesser.solved ? ` Solved in ${guesser.guesses.length}.` : ''}`;
+        } else text = `The word was ${m.state.word.toUpperCase()}. You: ${gs(m.mine)}. ${partnerName()}: ${gs(m.theirs)}.`;
       } else if (g.done(m.mine)) {
         box.hidden = false;
         box.className = 'p-result wait';
@@ -711,10 +750,11 @@
     box.className = 'p-result';
     box.innerHTML = `<div><b>${esc(title)}</b><p>${esc(text)}</p></div>
       <div class="actions row">
-        ${next ? `<button type="button" class="btn primary" data-a="next">Play the rematch</button>` : `<button type="button" class="btn primary" data-a="again">${m.solo ? 'New word' : 'Rematch'}</button>`}
+        ${next ? `<button type="button" class="btn primary" data-a="next">Play the rematch</button>` : `<button type="button" class="btn primary" data-a="again">${m.solo ? 'New word' : m.type === 'words' && m.state.mode === 'custom' ? 'Send a word back' : 'Rematch'}</button>`}
         <button type="button" class="btn" data-a="hub">${m.from === 'menu' ? 'Menu' : 'Games'}</button>
       </div>`;
     on(box, '[data-a=again]', () => {
+      if (m.type === 'words' && m.state.mode === 'custom' && window.BLMenus.words.make) { window.BLMenus.words.make(menuApi); return; }
       if (m.bot) startBot({ level: m.bot.level, seat: m.seat });
       else if (m.local || m.solo) { if (m.type === 'chess') BL.store.set('chessLocal', null); openLocal(m.type, m.from); }
       else startOnline(m.type, Object.assign({ gid: m.gid }, m.rec));
@@ -801,6 +841,13 @@
   BL.boot();
   connect();
   function handleLinkHash() {
+    const wl = location.hash.match(/^#w-([A-Za-z0-9_-]{6,200})$/);
+    if (wl) {
+      try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* ignore */ }
+      openMenu('words');
+      window.BLMenus.words.openLink(wl[1], menuApi);
+      return;
+    }
     const h = location.hash.match(/^#link-([A-Za-z0-9]{6})$/);
     if (!h) return;
     try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* ignore */ }

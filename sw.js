@@ -1,6 +1,6 @@
 /* Offline support: keeps the app on the phone so it opens without internet.
    Bump VERSION on every release so phones pick up the new files. */
-const VERSION = 'blueline-1.2.1';
+const VERSION = 'blueline-1.3.0';
 const KEEP = ['blueline-runtime', 'blueline-data'];
 const SHELL = [
   './',
@@ -23,7 +23,8 @@ const SHELL = [
   './js/chess-worker.js',
   './js/games/eights.js',
   './js/games/words.js',
-  './js/games/words-data.js',
+  './js/games/words-view.js',
+  './js/menus/words-menu.js',
   './js/games/fuse.js',
   './js/games/fuse-prompts.js',
   './manifest.webmanifest',

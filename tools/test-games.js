@@ -3,6 +3,7 @@ const four = require('../js/games/four.js');
 const chess = require('../js/games/chess.js');
 const eights = require('../js/games/eights.js');
 const words = require('../js/games/words.js');
+words.load();
 
 let fails = 0;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('  FAIL', msg); } };

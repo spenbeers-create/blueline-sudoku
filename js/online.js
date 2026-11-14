@@ -168,9 +168,12 @@
     });
     return res.committed ? res.snapshot.val() : null;
   }
-  async function setProgress(pid, gid, seat, prog) {
+  // quiet: save without counting as a move (no alerts on the other phone).
+  async function setProgress(pid, gid, seat, prog, quiet) {
     await ready();
-    await ref(`pairs/${pid}/games/${gid}`).update({ [`prog/${seat}`]: JSON.stringify(prog), updated: TS() });
+    const upd = { [`prog/${seat}`]: JSON.stringify(prog) };
+    if (!quiet) upd.updated = TS();
+    await ref(`pairs/${pid}/games/${gid}`).update(upd);
   }
   async function patch(pid, gid, fields) {
     await ready();

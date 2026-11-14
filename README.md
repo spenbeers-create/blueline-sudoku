@@ -8,10 +8,13 @@ both in the app, and take-your-turn when you're not.
 
 - **Sudoku**: 9×9, 12×12 and 16×16 grids; Classic, Diagonal and Killer; six graded levels from Easy to Insane;
   notes, hints that explain the logic, three strikes, a daily puzzle, stats, puzzle codes and live races.
-- **Chess**: full rules, including castling, en passant, promotion, check, checkmate, stalemate and draws.
+- **Chess**: full rules; six bot levels (Beginner to Master) with hints and takebacks; live games with a clock or
+  take-turns games with your partner; draw offers; board themes and three piece sets.
 - **Four in a Row**: drop discs and line up four.
 - **Crazy Eights**: match the suit or number, eights are wild, first to empty their hand wins.
-- **Word Duel**: you both get the same secret five-letter word. Fewer guesses wins.
+- **Word Duel**: guess the secret word in 4 to 7 letters. A daily word with streaks and a guess chart, practice,
+  hard mode and high-contrast colors. With your partner: duels (fewer guesses wins), live races (first to solve
+  wins) and words you pick for each other. Make a word and share a link anyone can play.
 - **Short Fuse**: type a word containing the letters shown to pass the lit fuse. Each fuse has a secret
   length; whoever holds it when it burns out loses a life. Your partner sees your letters as you type.
 
@@ -39,9 +42,11 @@ When you change the app, bump `VERSION` in `sw.js` so installed phones pick up t
 ```
 python -m http.server 5180
 node tools/test-engine.js        # Sudoku: every size, style and level
-node tools/test-games.js         # Chess (perft), Four in a Row, Crazy Eights, Word Duel
+node tools/test-games.js         # Chess (perft), Four in a Row, Crazy Eights
+node tools/test-chess-ai.js      # the chess bot: perft, legal moves, mates, strength
+node tools/test-words.js         # Word Duel
 node tools/test-fuse.js          # Short Fuse
 ```
 
-Word lists come from SCOWL via the `wordlist-english` package; `tools/gen.js` and `tools/gen-fuse.js`
-rebuild them.
+Word lists come from SCOWL via the `wordlist-english` package; the scripts in `tools/`
+rebuild them (`tools/gen-words.js` for Word Duel, `tools/gen-fuse.js` for Short Fuse).
