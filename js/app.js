@@ -17,7 +17,7 @@
   };
   const STRIKES = 3;
   const DAILY_LEVEL = ['extreme', 'easy', 'medium', 'hard', 'hard', 'expert', 'expert']; // Sunday first
-  const VERSION = '1.0.3';
+  const VERSION = '1.1.0';
 
   // ------------------------------------------------------------- storage
   const store = {
@@ -197,14 +197,21 @@
   }
 
   // ------------------------------------------------------------- screens
+  // Screens: hub (all games), home (Sudoku menu), game (Sudoku board), play (two-player games).
+  const SCREENS = ['hub', 'home', 'game', 'play'];
   function show(which) {
-    $('#home').hidden = which !== 'home';
-    $('#game').hidden = which !== 'game';
+    for (const id of SCREENS) { const el = $('#' + id); if (el) el.hidden = id !== which; }
     if (which === 'home') renderHome();
     if (which === 'game') {
       if (!history.state || history.state.s !== 'game') { try { history.pushState({ s: 'game' }, ''); } catch (e) { /* ignore */ } }
       layoutBoard();
     }
+    if ((which === 'home' || which === 'play') && (!history.state || !history.state.s)) { try { history.pushState({ s: 'sub' }, ''); } catch (e) { /* ignore */ } }
+    document.dispatchEvent(new CustomEvent('bl:show', { detail: which }));
+  }
+  function toHub() {
+    if (history.state && history.state.s === 'sub') { ignorePop = true; history.back(); }
+    show('hub');
   }
 
   let ignorePop = false;
@@ -224,7 +231,10 @@
     if (!$('#game').hidden) {
       if ((G && G.race) || sheetOpen()) { history.pushState({ s: 'game' }, ''); if (G && G.race && !sheetOpen()) confirmLeaveRace(); return; }
       goHome(true);
+      return;
     }
+    if (!$('#play').hidden) { document.dispatchEvent(new Event('bl:back')); return; }
+    if (!$('#home').hidden) show('hub');
   });
 
   // ---------------------------------------------------------------- board
@@ -1650,14 +1660,20 @@
 
   function boot() {
     applyTheme();
-    if (history.state && history.state.s === 'game') { try { history.replaceState(null, ''); } catch (e) { /* ignore */ } }
+    if (history.state && history.state.s) { try { history.replaceState(null, ''); } catch (e) { /* ignore */ } }
     G = loadGame();
-    show('home');
+    show('hub');
     const h = location.hash;
     let m;
-    if ((m = h.match(/^#race-([A-Za-z0-9]{5})$/))) openRace(m[1].toUpperCase());
-    else if ((m = h.match(/^#play-([A-Za-z0-9-]{6,16})$/))) openCode(m[1].toUpperCase());
-    if (h) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* ignore */ } }
+    if ((m = h.match(/^#race-([A-Za-z0-9]{5})$/))) { show('home'); openRace(m[1].toUpperCase()); }
+    else if ((m = h.match(/^#play-([A-Za-z0-9-]{6,16})$/))) { show('home'); openCode(m[1].toUpperCase()); }
+    if (/^#(race|play)-/.test(h)) { try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* ignore */ } }
   }
-  boot();
+
+  // Shared helpers for the game hub (hub.js), which calls BL.boot() once it has loaded.
+  $('#home-back').onclick = () => toHub();
+  window.BL = {
+    openSheet, closeSheet, sheetOpen, toast, shareText, copyText, esc, fmt, settings, saveSettings, store,
+    show, toHub, openSettings, buzz, boot,
+  };
 })();

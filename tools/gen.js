@@ -1,0 +1,20 @@
+const w = require('wordlist-english');
+const out = process.argv[2];
+const five = x => /^[a-z]{5}$/.test(x);
+const tiers = (maxT, dialects) => { const s = new Set(); for (const d of dialects) for (const t of [10, 20, 35, 40, 50, 55, 60, 70]) { if (t > maxT) continue; for (const x of (w[`${d}/${t}`] || [])) if (five(x)) s.add(x); } return s; };
+const common = tiers(35, ['english', 'english/american']);
+const allowed = new Set(); for (const k of ['english', 'english/american', 'english/british', 'english/canadian', 'english/australian']) for (const x of (w[k] || [])) if (five(x)) allowed.add(x);
+const all = new Set([...tiers(95, ['english', 'english/american'])]);
+const allWords = new Set(); for (const d of ['english', 'english/american']) for (const t of [10,20,35,40,50,55,60,70]) for (const x of (w[`${d}/${t}`] || [])) allWords.add(x);
+const block = new Set('bitch whore pussy penis vagin dildo boobs balls crack slave nazis rapes raped rapist sluts slut kills porno pimps homos gayer bimbo semen sperm horny butts boner niger nigga negro dykes faggs fucks shits twats wanks cunts arses asses hoes'.split(' '));
+const answers = [...common].filter(x => {
+  if (block.has(x)) return false;
+  if (x.endsWith('s') && !x.endsWith('ss') && allWords.has(x.slice(0, -1))) return false;
+  if (x.endsWith('ed') && (allWords.has(x.slice(0, -2)) || allWords.has(x.slice(0, -1)))) return false;
+  if (x.endsWith('es') && allWords.has(x.slice(0, -2))) return false;
+  return true;
+}).sort();
+for (const a of answers) allowed.add(a);
+const allowedList = [...allowed].sort();
+require('fs').writeFileSync(out, `/* Word Duel word lists, generated from SCOWL (wordlist-english) by tools. */\nwindow.WORDS5 = {\n  answers: '${answers.join(' ')}',\n  allowed: '${allowedList.join(' ')}',\n};\n`);
+console.log('answers', answers.length, 'allowed', allowedList.length, 'sample', answers.slice(100, 112).join(','));

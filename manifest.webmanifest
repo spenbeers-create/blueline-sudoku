@@ -1,7 +1,7 @@
 {
-  "name": "Blueline Sudoku",
+  "name": "Blueline",
   "short_name": "Blueline",
-  "description": "Ad-free Sudoku with live races, big grids, Killer and Diagonal modes.",
+  "description": "Ad-free games for two: Sudoku, Chess, Four in a Row, Crazy Eights, Word Duel and Short Fuse.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

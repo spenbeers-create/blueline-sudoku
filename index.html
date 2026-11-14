@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Blueline Sudoku</title>
-<meta name="description" content="Ad-free Sudoku with live races, big grids, Killer and Diagonal modes.">
+<title>Blueline</title>
+<meta name="description" content="Ad-free games for two: Sudoku, chess, Four in a Row, Crazy Eights and Word Duel, online or on one phone.">
 <meta name="theme-color" content="#EEF2F7" id="meta-theme">
 <meta name="color-scheme" content="light dark">
 <meta name="mobile-web-app-capable" content="yes">
@@ -19,10 +19,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Lexend:wght@300;400;500;600&display=swap">
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/games.css">
 </head>
 <body>
 
-<main id="home" class="screen home" aria-labelledby="brand-name">
+<main id="hub" class="screen home hub" aria-labelledby="hub-name">
   <div class="home-inner">
     <header class="brand">
       <svg class="brand-mark" viewBox="0 0 30 30" aria-hidden="true">
@@ -33,7 +34,38 @@
         <path d="M11.33 4v22M18.67 4v22M4 11.33h22M4 18.67h22" class="bm-grid"/>
       </svg>
       <div class="brand-text">
-        <h1 id="brand-name">Blueline</h1>
+        <h1 id="hub-name">Blueline</h1>
+        <p id="hub-today" class="today"></p>
+      </div>
+      <button type="button" class="icon-btn" id="hub-settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"/><path d="M19.4 13.5a7.7 7.7 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.7 7.7 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.6Z"/></svg>
+      </button>
+    </header>
+    <section class="pair-card" id="pair-card" aria-live="polite"></section>
+    <div id="hub-lists"></div>
+    <section class="games-sec" aria-labelledby="games-h">
+      <h2 id="games-h">Games</h2>
+      <div class="game-grid" id="hub-games"></div>
+      <p class="coming" id="hub-coming"></p>
+    </section>
+  </div>
+</main>
+
+<main id="home" class="screen home" aria-labelledby="brand-name" hidden>
+  <div class="home-inner">
+    <header class="brand">
+      <button type="button" class="icon-btn" id="home-back" aria-label="Back to all games">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <svg class="brand-mark sm" viewBox="0 0 30 30" aria-hidden="true">
+        <rect x="1" y="1" width="28" height="28" rx="7" class="bm-bg"/>
+        <rect x="4" y="4" width="22" height="7.33" class="bm-lane"/>
+        <rect x="18.67" y="4" width="7.33" height="22" class="bm-lane"/>
+        <rect x="18.67" y="4" width="7.33" height="7.33" rx="1.5" class="bm-dot"/>
+        <path d="M11.33 4v22M18.67 4v22M4 11.33h22M4 18.67h22" class="bm-grid"/>
+      </svg>
+      <div class="brand-text">
+        <h1 id="brand-name">Sudoku</h1>
         <p id="today" class="today"></p>
       </div>
       <button class="icon-btn" id="open-settings" aria-label="Settings">
@@ -143,6 +175,21 @@
   </div>
 </section>
 
+<section id="play" class="screen game play" hidden aria-label="Game">
+  <header class="game-head">
+    <button type="button" class="icon-btn" id="p-back" aria-label="Back to all games">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="g-title"><strong id="p-title"></strong><span id="p-sub"></span></div>
+    <button type="button" class="icon-btn" id="p-menu" aria-label="Game menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
+    </button>
+  </header>
+  <div class="p-players" id="p-players"></div>
+  <div class="p-body" id="p-body"></div>
+  <div class="p-result" id="p-result" hidden></div>
+</section>
+
 <div class="scrim" id="scrim" hidden></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
   <div class="sheet-grip" aria-hidden="true"></div>
@@ -153,5 +200,16 @@
 <script src="js/engine.js"></script>
 <script src="js/net.js"></script>
 <script src="js/app.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/online.js"></script>
+<script src="js/games/words-data.js"></script>
+<script src="js/games/four.js"></script>
+<script src="js/games/chess.js"></script>
+<script src="js/games/eights.js"></script>
+<script src="js/games/words.js"></script>
+<script src="js/games/fuse-prompts.js"></script>
+<script src="js/games/fuse.js"></script>
+<script src="js/views.js"></script>
+<script src="js/hub.js"></script>
 </body>
 </html>
