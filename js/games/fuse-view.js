@@ -64,6 +64,7 @@
         </div>`;
       const input = el.querySelector('#fz-in'), note = el.querySelector('.fz-note'), form = el.querySelector('.fz-form');
       const startBox = el.querySelector('.fz-start'), boomBox = el.querySelector('.fz-boom'), stage = el.querySelector('.fz-stage');
+      let typedFor = -1;
       let snap = null, dictReady = F.hasDictionary(), dictError = false, boomSent = 0, seenLog = -1, draftT = 0, lastTurnKey = '';
       F.loadDictionary().then(() => { dictReady = true; paint(); }).catch(() => { dictError = true; paint(); });
 
@@ -86,6 +87,12 @@
       });
       input.addEventListener('input', () => {
         note.textContent = '';
+        // Starting to type holds the fuse for a few seconds so you can finish.
+        const s = snap && snap.state;
+        if (s && snap.canAct && input.value && s.variant !== 'last' && s.typed !== s.n && typedFor !== s.n) {
+          const now = ctx.now();
+          if (now >= (s.roundStart || 0) && now < s.fuseEnd) { typedFor = s.n; ctx.send({ typing: true, at: now }); }
+        }
         clearTimeout(draftT);
         draftT = setTimeout(() => ctx.setDraft(input.value.slice(0, 30)), 100);
       });

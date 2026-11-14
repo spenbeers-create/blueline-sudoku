@@ -448,6 +448,9 @@
     2: { think: [1200, 3500], cps: 8, fail: 0.1 },
     3: { think: [500, 1800], cps: 12, fail: 0.03 },
   };
+  // In Last Word the slowest player loses, so bots answer somewhere inside the time
+  // limit instead of racing: Rookies late, Sharks early.
+  const LAST_PACE = { 1: [0.4, 0.9], 2: [0.25, 0.7], 3: [0.12, 0.45] };
   const rnd = (a, b) => a + Math.random() * (b - a);
   let commonP = null;
   function loadCommon() {
@@ -497,7 +500,11 @@
       if (plan) { plan.timers.forEach(clearTimeout); delete plans[p]; }
       if (!act) return;
       const sk = FUSE_SKILL[pl.bot] || FUSE_SKILL[2], now = Date.now();
-      let wait = Math.max(0, (s.roundStart || 0) - now) + rnd(sk.think[0], sk.think[1]);
+      let wait = Math.max(0, (s.roundStart || 0) - now);
+      if (s.variant === 'last') {
+        const pace = LAST_PACE[pl.bot] || LAST_PACE[2], limit = (s.settings && s.settings.limit) || 12000;
+        wait += limit * rnd(pace[0], pace[1]);
+      } else wait += rnd(sk.think[0], sk.think[1]);
       if (Math.random() < sk.fail) wait += rnd(3000, 9000);
       const word = F.botWord(s, Math.random), timers = [];
       plans[p] = { key, timers };
@@ -731,7 +738,7 @@
       if (m.bot && m.thinking) return 'Wait for the bot to move.';
       const before = m.state;
       m.state = g.apply(m.state, move, actor);
-      BL.buzz && BL.buzz(8);
+      if (!move.typing && BL.buzz) BL.buzz(8);
       if (m.bot) {
         if (move.from != null) m.stack.push(before);
         saveBot();

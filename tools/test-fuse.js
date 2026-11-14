@@ -126,5 +126,31 @@ ok(thin.length === 0, 'thin prompts: ' + thin.slice(0, 5).join(','));
   for (let i = 0; i < 60; i++) long = fuse.apply(long, { word: find(long), at: long.roundStart + 1 }, long.turn);
   ok(long.log.length === 40 && long.ev === 60, 'log trims to 40 but the counter keeps going');
 }
+// Nobody gets blown up the moment the fuse reaches them, and typing buys time.
+{
+  let g = fuse.create({ seed: 'grace', players: [{ name: 'A' }, { name: 'B' }] });
+  g = fuse.apply(g, { start: true, at: 0 }, 0);
+  const late = g.fuseEnd - 200;
+  g = fuse.apply(g, { word: find(g), at: late }, 0);
+  ok(g.turn === 1 && g.fuseEnd === late + fuse.GRACE, 'fuse reaching you with 0.2s left gives you the grace period');
+  ok(!fuse.legal(g, { boom: true, round: g.round, at: late + 1000 }, 0), 'no boom during the grace period');
+  ok(!fuse.legal(g, { typing: true, at: late + 500 }, 0), 'only the holder can hold the fuse');
+  ok(fuse.legal(g, { typing: true, at: late + 1000 }, 1), 'the holder starting to type is allowed');
+  g = fuse.apply(g, { typing: true, at: late + 1000 }, 1);
+  ok(g.fuseEnd === late + 1000 + fuse.TYPING, 'typing makes the fuse wait');
+  ok(!fuse.legal(g, { typing: true, at: late + 2000 }, 1), 'only once a turn');
+  ok(!fuse.legal(g, { boom: true, round: g.round, at: late + 4000 }, 0), 'no boom while they finish typing');
+  ok(fuse.legal(g, { word: find(g), at: late + 5500 }, 1), 'they can still send their word');
+  // A long fuse isn't shortened by any of this.
+  let h = fuse.create({ seed: 'grace2', players: [{ name: 'A' }, { name: 'B' }] });
+  h = fuse.apply(h, { start: true, at: 0 }, 0);
+  const end = h.fuseEnd;
+  h = fuse.apply(h, { word: find(h), at: h.roundStart + 100 }, 0);
+  h = fuse.apply(h, { typing: true, at: h.roundStart + 200 }, 1);
+  ok(h.fuseEnd === end, 'grace and typing never shorten the fuse');
+  let lw = fuse.create({ seed: 'g3', variant: 'last', players: [{ name: 'A' }, { name: 'B' }] });
+  lw = fuse.apply(lw, { start: true, at: 0 }, 0);
+  ok(!fuse.legal(lw, { typing: true, at: lw.roundStart + 10 }, 0), 'no typing hold in Last Word');
+}
 console.log(fails ? `${fails} failure(s)` : 'All Short Fuse checks passed');
 process.exit(fails ? 1 : 0);

@@ -201,7 +201,7 @@
   function howTo() {
     BL.openSheet(`
       <h2 id="sheet-title">How to play</h2>
-      <p class="lede"><b>Pass the fuse.</b> When it’s your turn, type any real word that contains the letters on screen, in that order and together. “ING” works with “singer”. That passes the fuse on. Each fuse has a secret length and keeps burning between turns. Whoever holds it when it blows loses a life.</p>
+      <p class="lede"><b>Pass the fuse.</b> When it’s your turn, type any real word that contains the letters on screen, in that order and together. “ING” works with “singer”. That passes the fuse on. Each fuse has a secret length and keeps burning between turns. Whoever holds it when it blows loses a life. You always get a few seconds when it reaches you, and once you start typing it waits for you to finish.</p>
       <p class="lede"><b>Last Word.</b> Everyone gets the letters at once and types a word as fast as they can. The last one in loses a life, and so does anyone still without a word when time runs out.</p>
       <p class="lede"><b>Bonus life.</b> Use every letter of the alphabet except J, Q, X and Z across your words to win a life back. The letters under your box show what you still need.</p>
       <p class="lede"><b>No repeats.</b> A word can only be played once per game.</p>

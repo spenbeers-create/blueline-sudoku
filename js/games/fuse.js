@@ -10,6 +10,8 @@
   'use strict';
   const GAMES = root.BLGames || (root.BLGames = {});
   const PAUSE = 2200;
+  const GRACE = 3500;    // the fuse never blows within this long of reaching you
+  const TYPING = 5000;   // once you start typing, it waits at least this long
   const BONUS = 'abcdefghiklmnoprstuvwy';   // every letter except j, q, x, z
   let dict = null, dictArr = null, dictP = null, prompts = null, common = null;
 
@@ -91,7 +93,7 @@
   const logic = {
     id: 'fuse', name: 'Short Fuse', category: 'words', kind: 'turns', live: true, local: true,
     blurb: 'Type a word with the letters before the fuse burns out. Play with friends or bots.',
-    LIVES: 3, PAUSE, BONUS,
+    LIVES: 3, PAUSE, BONUS, GRACE, TYPING,
     setDictionary(words) { dict = words instanceof Set ? words : new Set(words); dictArr = null; },
     setCommon(words) { common = words; },
     hasDictionary: () => !!dict,
@@ -143,6 +145,8 @@
     legal(s, m, p) {
       if (!m || s.winner != null) return false;
       if (m.start) return !s.started;
+      // First keystroke on your turn: the fuse waits for you to finish (once a turn).
+      if (m.typing) return s.variant !== 'last' && s.started && p === s.turn && s.typed !== s.n && m.at >= (s.roundStart || 0) - 300 && m.at < s.fuseEnd;
       if (s.variant === 'last') {
         if (m.timeout) return s.started && m.round === s.round && m.at >= s.deadline;
         if (m.word != null) return s.started && !!s.players[p] && s.players[p].lives > 0 && !(s.done || {})[p] && m.at >= s.roundStart - 300 && m.at < s.deadline && !logic.problem(s, m.word);
@@ -162,6 +166,7 @@
         s.deadline = s.roundStart + (st.limit || 12000);
         return s;
       }
+      if (m.typing) { s.typed = s.n; s.fuseEnd = Math.max(s.fuseEnd, m.at + TYPING); return s; }
       if (s.variant === 'last') return applyLast(s, m, p, st);
       if (m.word != null) {
         const w = clean(m.word);
@@ -170,6 +175,7 @@
         logIt(s, { p, w, k: s.prompt, bonus });
         s.last = { p, w, k: s.prompt, bonus };
         s.turn = nextAlive(s, p);
+        s.fuseEnd = Math.max(s.fuseEnd, m.at + GRACE);
         s.n++;
         s.prompt = promptFor(s.seed, s.n, st.difficulty);
       } else if (m.boom) {
