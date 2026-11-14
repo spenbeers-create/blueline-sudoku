@@ -138,7 +138,7 @@
       const status = net === 'offline' ? 'You’re offline. Games sync when you’re back.' : pOn ? (pOn.game && games[pOn.game] ? `Playing ${gameName(games[pOn.game].type)} now` : 'Online now') : 'Not in the app right now';
       card.innerHTML = `<button type="button" class="pair-me" id="pair-open" aria-label="Partner settings">
           <span class="avatar a1">${esc(myName()[0].toUpperCase())}</span><span class="avatar a2">${esc(partnerName()[0].toUpperCase())}</span>
-          <span class="pair-text"><b>You and ${esc(partnerName())}</b><span><i class="dot ${pOn ? 'on' : ''}"></i>${esc(status)}</span></span>
+          <span class="pair-text"><b>You and ${esc(partnerName())}</b><span><i class="pres-dot ${pOn ? 'on' : ''}"></i>${esc(status)}</span></span>
         </button>`;
       on(card, '#pair-open', openPartner);
     }

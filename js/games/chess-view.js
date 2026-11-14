@@ -303,7 +303,7 @@
           if (review == null && i === selFrom) cls += ' sel';
           if (i === kingInCheck) cls += ' check';
           if (review == null && L.dots && tset.has(i)) cls += p !== '.' || tset.get(i).ep ? ' cap' : ' dot';
-          if (review == null && hint && (i === hint.from || i === hint.to)) cls += ' hint';
+          if (review == null && hint && (i === hint.from || i === hint.to)) cls += ' hintsq';
           if (cell.className !== cls) cell.className = cls;
           const coord = (v % 8 === 0 ? `<em class="rk">${8 - r}</em>` : '') + (v >= 56 ? `<em class="fl">${'abcdefgh'[f]}</em>` : '');
           const html = (p !== '.' ? pieceHtml(p, L.pieces) : '') + coord;
