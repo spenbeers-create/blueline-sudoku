@@ -183,9 +183,77 @@
   // Live typing for word games. Not a move, so it leaves 'updated' alone.
   async function draft(pid, gid, value) { await ready(); await ref(`pairs/${pid}/games/${gid}/draft`).set(value); }
 
+
+  // ----------------------------------------------------------- party rooms
+  // rooms/{code}: anyone signed in who knows the code can join (2 to 8 players).
+  // asScreen: a TV or laptop that shows the game but doesn't play in it.
+  async function createRoom(name, settings, asScreen, game) {
+    await ready();
+    let c = code(5);
+    for (let i = 0; i < 5 && (await ref(`rooms/${c}`).get()).exists(); i++) c = code(5);
+    const rec = { host: uid, game: game || 'fuse', status: 'lobby', created: TS(), updated: TS(), settings };
+    if (asScreen) rec.screen = uid;
+    else rec.players = { [uid]: { name, at: TS() } };
+    await ref(`rooms/${c}`).set(rec);
+    return c;
+  }
+  async function joinRoom(c, name) {
+    await ready();
+    const snap = await ref(`rooms/${c}`).get();
+    const r = snap.val();
+    if (!r) throw Object.assign(new Error('no room'), { code: 'no-room' });
+    const mine = r.players && r.players[uid];
+    if (!mine && r.status !== 'lobby') throw Object.assign(new Error('started'), { code: 'started' });
+    if (!mine && Object.keys(r.players || {}).length >= 8) throw Object.assign(new Error('full'), { code: 'full' });
+    await ref(`rooms/${c}/players/${uid}`).update({ name, at: TS() });
+    return r;
+  }
+  function watchRoom(c, fn) { return watch(`rooms/${c}`, 'value', v => fn(v)); }
+  async function updateRoom(c, fn) {
+    await ready();
+    const res = await ref(`rooms/${c}`).transaction(cur => {
+      if (cur === null) return cur;
+      const next = fn(JSON.parse(JSON.stringify(cur)));
+      if (next === undefined) return undefined;
+      next.updated = TS();
+      return next;
+    });
+    return res.committed ? res.snapshot.val() : null;
+  }
+  // Moves run on the game state alone, so typing and presence writes never slow them down.
+  async function roomMove(c, fn) {
+    await ready();
+    const res = await ref(`rooms/${c}/state`).transaction(cur => {
+      if (cur === null) return cur;
+      const next = fn(cur);
+      return next === undefined ? undefined : next;
+    });
+    return res.committed ? res.snapshot.val() : null;
+  }
+  async function patchRoom(c, fields) { await ready(); await ref(`rooms/${c}`).update(Object.assign({ updated: TS() }, fields)); }
+  async function roomDraft(c, value) { await ready(); await ref(`rooms/${c}/draft`).set(value); }
+  async function roomHere(c, on) {
+    await ready();
+    const r = ref(`rooms/${c}/here/${uid}`);
+    if (on === false) { await r.remove(); return; }
+    r.onDisconnect().remove();
+    await r.set(TS());
+  }
+  async function leaveRoom(c, isHost, lobby) {
+    await ready();
+    if (isHost && lobby) { await ref(`rooms/${c}`).remove(); return; }
+    await ref(`rooms/${c}/here/${uid}`).remove();
+    if (!lobby) return;
+    await ref(`rooms/${c}/players/${uid}`).remove();
+    // Last one out of an empty lobby tidies the room away.
+    const r = (await ref(`rooms/${c}`).get()).val();
+    if (r && !r.screen && !Object.keys(r.players || {}).length) await ref(`rooms/${c}`).remove();
+  }
+
   window.Online = {
     configured, ready, partners, invite, accept, setName, unlink,
     here, watchHere, createGame, watchGames, watchGame, update, setProgress, patch, removeGame, draft,
+    createRoom, joinRoom, watchRoom, updateRoom, roomMove, patchRoom, roomDraft, roomHere, leaveRoom,
     me: () => uid, now, code,
   };
 })();

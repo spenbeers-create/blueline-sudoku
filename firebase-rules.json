@@ -12,6 +12,12 @@
         ".write": "auth != null && (!data.exists() ? newData.child('from').val() === auth.uid : (data.child('from').val() === auth.uid || (!data.child('to').exists() && newData.child('to').val() === auth.uid && newData.child('from').val() === data.child('from').val())))"
       }
     },
+    "rooms": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
     "pairs": {
       "$pid": {
         ".read": "auth != null && data.child('members').child(auth.uid).exists()",

@@ -16,7 +16,13 @@ both in the app, and take-your-turn when you're not.
   hard mode and high-contrast colors. With your partner: duels (fewer guesses wins), live races (first to solve
   wins) and words you pick for each other. Make a word and share a link anyone can play.
 - **Short Fuse**: type a word containing the letters shown to pass the lit fuse. Each fuse has a secret
-  length; whoever holds it when it burns out loses a life. Your partner sees your letters as you type.
+  length; whoever holds it when it burns out loses a life. Use every letter except J, Q, X and Z to win
+  a life back. Two ways to play: Pass the fuse, or Last Word (everyone types at once and the last one in
+  loses a life). Play bots (three skill levels), practice alone, challenge your partner, or open a
+  party room for up to 8 phones.
+- **TV mode** (Short Fuse for now): open Blueline in a TV's web browser, or on a laptop plugged into the
+  TV, and tap TV mode. The screen shows a room code and QR code, everyone joins on their phones, and the
+  letters, lives and live typing play out on the big screen.
 
 Board and card games also play on one phone (pass and play). Word Duel has solo practice.
 
@@ -24,7 +30,8 @@ Board and card games also play on one phone (pass and play). Word Duel has solo 
 
 Online games use a free Firebase project (`js/firebase-config.js`). Each phone signs in anonymously.
 The Realtime Database rules in `firebase-rules.json` let each phone read only its own data, and only
-the two linked players can read or write their shared games. Paste those rules into
+the two linked players can read or write their shared games. Party rooms and TV mode live under
+`rooms/`, which anyone signed in with the room code can join. Paste those rules into
 **Realtime Database → Rules** if the project is ever recreated.
 
 ## Put it online (GitHub Pages)

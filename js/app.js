@@ -17,7 +17,7 @@
   };
   const STRIKES = 3;
   const DAILY_LEVEL = ['extreme', 'easy', 'medium', 'hard', 'hard', 'expert', 'expert']; // Sunday first
-  const VERSION = '1.3.0';
+  const VERSION = '1.4.0';
 
   // ------------------------------------------------------------- storage
   const store = {
@@ -198,7 +198,7 @@
 
   // ------------------------------------------------------------- screens
   // Screens: hub (all games), home (Sudoku menu), game (Sudoku board), play (two-player games).
-  const SCREENS = ['hub', 'home', 'game', 'play', 'menu'];
+  const SCREENS = ['hub', 'home', 'game', 'play', 'menu', 'tv'];
   function show(which) {
     for (const id of SCREENS) { const el = $('#' + id); if (el) el.hidden = id !== which; }
     if (which === 'home') renderHome();
@@ -234,6 +234,7 @@
       return;
     }
     if (!$('#play').hidden) { document.dispatchEvent(new Event('bl:back')); return; }
+    if (!$('#tv').hidden) { document.dispatchEvent(new Event('bl:tvback')); return; }
     if (!$('#home').hidden || !$('#menu').hidden) show('hub');
   });
 

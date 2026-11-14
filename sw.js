@@ -1,6 +1,6 @@
 /* Offline support: keeps the app on the phone so it opens without internet.
    Bump VERSION on every release so phones pick up the new files. */
-const VERSION = 'blueline-1.3.0';
+const VERSION = 'blueline-1.4.0';
 const KEEP = ['blueline-runtime', 'blueline-data'];
 const SHELL = [
   './',
@@ -27,6 +27,10 @@ const SHELL = [
   './js/menus/words-menu.js',
   './js/games/fuse.js',
   './js/games/fuse-prompts.js',
+  './js/games/fuse-view.js',
+  './js/menus/fuse-menu.js',
+  './js/tv.js',
+  './js/games/fuse-tv.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',
@@ -35,7 +39,7 @@ const SHELL = [
   './icons/apple-touch-icon.png',
 ];
 // Fonts, the Sudoku race library and the online-play library.
-const RUNTIME_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com', 'www.gstatic.com'];
+const RUNTIME_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com', 'www.gstatic.com', 'cdnjs.cloudflare.com'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)));

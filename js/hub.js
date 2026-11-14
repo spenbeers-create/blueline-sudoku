@@ -10,7 +10,7 @@
 
   const CATALOG = [
     { id: 'sudoku', name: 'Sudoku', cat: 'Puzzles', blurb: 'Six levels, big grids, Killer and Diagonal.', players: 'Solo or race' },
-    { id: 'fuse', cat: 'Words', players: '2 players, live' },
+    { id: 'fuse', cat: 'Words', players: 'Up to 8 · TV mode' },
     { id: 'words', cat: 'Words', players: '2 players' },
     { id: 'four', cat: 'Board', players: '2 players' },
     { id: 'chess', cat: 'Board', players: '2 players' },
@@ -333,6 +333,9 @@
     resumeLocal: type => resumeLocal(type),
     link: () => openLink(),
     openSolo: (type, cfg) => openSolo(type, cfg),
+    startFuse: cfg => startFuse(cfg),
+    openRoom: (code, seat) => openRoom(code, seat),
+    startTv: type => { if (window.BLTV) window.BLTV.open(type || 'fuse', menuApi); },
     back: () => leave(),
   };
   function openSolo(type, cfg) {
@@ -437,6 +440,121 @@
     renderMatch();
   }
 
+  // ---------------------------------------------------- short fuse: bots
+  // Each bot thinks, types its word letter by letter, then sends it. Sometimes it
+  // gets stuck for a while, which is how the fuse catches it.
+  const FUSE_SKILL = {
+    1: { think: [2500, 5500], cps: 5, fail: 0.22 },
+    2: { think: [1200, 3500], cps: 8, fail: 0.1 },
+    3: { think: [500, 1800], cps: 12, fail: 0.03 },
+  };
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  let commonP = null;
+  function loadCommon() {
+    if (!commonP) {
+      commonP = fetch('data/words.json').then(r => r.json()).then(d => {
+        const all = [];
+        for (const k of Object.keys(d)) if (d[k] && d[k].answers) all.push(...d[k].answers.split(' '));
+        GAMES.fuse.setCommon(all);
+      }).catch(() => { commonP = null; });
+    }
+    return commonP;
+  }
+  async function startFuse(cfg) {
+    const F = GAMES.fuse;
+    if (!F.hasDictionary()) BL.openSheet('<h2 id="sheet-title">Getting the words ready…</h2><div class="status-line"><span class="spinner"></span>Loading the dictionary</div>', { locked: true });
+    try { await F.loadDictionary(); } catch (e) { BL.closeSheet(); BL.toast('The word list didn’t load. Check your connection.'); return; }
+    await loadCommon();
+    if (BL.sheetOpen()) BL.closeSheet();
+    buildMatch('fuse', { fuseBots: true, seat: 0, from: 'menu', fuseCfg: cfg, botPlans: {} });
+    let st = F.create(Object.assign({ seed: Math.random().toString(36).slice(2), players: cfg.players }, cfg.settings));
+    st = F.apply(st, { start: true, at: Date.now() }, 0);
+    match.state = st;
+    renderMatch();
+    planFuseBots();
+  }
+  function fuseApply(move, p) {
+    const m = match;
+    if (!m) return 'No game open.';
+    const g = m.game;
+    if (!g.legal(m.state, move, p)) return 'That move isn’t allowed.';
+    m.state = g.apply(m.state, move, p);
+    if (m.draft && (move.word != null || move.boom || move.timeout)) m.draft = null;
+    renderMatch();
+    planFuseBots();
+    return '';
+  }
+  function planFuseBots() {
+    const m = match;
+    if (!m || !m.fuseBots) return;
+    const F = m.game, s = m.state, plans = m.botPlans;
+    const live = s.started && !F.over(s), key = `${s.round}:${s.n}`;
+    s.players.forEach((pl, p) => {
+      if (!pl.bot) return;
+      const act = live && F.canAct(s, p);
+      const plan = plans[p];
+      if (plan && plan.key === key && act) return;
+      if (plan) { plan.timers.forEach(clearTimeout); delete plans[p]; }
+      if (!act) return;
+      const sk = FUSE_SKILL[pl.bot] || FUSE_SKILL[2], now = Date.now();
+      let wait = Math.max(0, (s.roundStart || 0) - now) + rnd(sk.think[0], sk.think[1]);
+      if (Math.random() < sk.fail) wait += rnd(3000, 9000);
+      const word = F.botWord(s, Math.random), timers = [];
+      plans[p] = { key, timers };
+      if (!word) return;                               // stuck for good this turn
+      const per = 1000 / sk.cps;
+      if (s.variant !== 'last') {
+        for (let i = 1; i <= word.length; i++) {
+          timers.push(setTimeout(() => {
+            if (match !== m || !F.canAct(m.state, p)) return;
+            m.draft = { seat: p, text: word.slice(0, i), n: m.state.n };
+            renderMatch();
+          }, wait + i * per));
+        }
+      }
+      timers.push(setTimeout(() => {
+        if (match !== m) return;
+        delete plans[p];
+        const mv = { word, at: Date.now() };
+        if (F.legal(m.state, mv, p)) fuseApply(mv, p);
+        else planFuseBots();
+      }, wait + word.length * per + 180));
+    });
+  }
+
+  // --------------------------------------------------- short fuse: rooms
+  // Everyone in a party room watches the same record; moves are transactions on its state.
+  function openRoom(code, seat) {
+    buildMatch('fuse', { room: code, seat, from: 'menu' });
+    const m = match;
+    O.roomHere(code).catch(() => {});
+    m.stopRoom = O.watchRoom(code, r => {
+      if (match !== m) return;
+      if (!r) { BL.toast('The room closed.'); leave(); return; }
+      if (r.status === 'lobby') { leave(); window.BLMenus.fuse.lobby(code, menuApi); return; }
+      const st = parse(r.state);
+      if (!st) return;
+      m.rec = r; m.state = st; m.draft = r.draft || null;
+      renderMatch();
+    });
+  }
+  async function roomSubmit(move) {
+    const m = match, g = m.game, code = m.room, seat = m.seat;
+    if (!m.state || g.over(m.state)) return 'This game is over.';
+    if (!g.legal(m.state, move, seat)) return 'That move isn’t allowed.';
+    try {
+      const res = await O.roomMove(code, cur => {
+        const st = parse(cur);
+        if (!st || !g.legal(st, move, seat)) return undefined;
+        return JSON.stringify(g.apply(st, move, seat));
+      });
+      if (!res) return move.word != null ? 'late' : '';
+      const n = parse(res);
+      if (n && g.over(n)) O.patchRoom(code, { status: 'over' }).catch(() => {});
+    } catch (e) { BL.toast('Couldn’t reach the room. Check your connection.'); }
+    return '';
+  }
+
   function openGameSheet(id) {
     if (id === 'sudoku') { BL.show('home'); return; }
     if (window.BLMenus && window.BLMenus[id]) { openMenu(id); return; }
@@ -473,10 +591,11 @@
     const seed = O.code(10);
     if (!opts && swapFrom) {
       const prev = parse(swapFrom.state) || {};
-      opts = { mode: swapFrom.mode, tc: swapFrom.tcSpec || null, len: prev.len, hard: prev.hard };
+      opts = { mode: swapFrom.mode, tc: swapFrom.tcSpec || null, len: prev.len, hard: prev.hard, variant: prev.variant, settings: prev.settings };
     }
     opts = opts || {};
-    const extraOpts = type === 'words' ? { len: opts.len, hard: opts.hard, mode: opts.mode || 'duel', word: opts.word, hint: opts.hint, by: opts.by, guesser: opts.mode === 'custom' ? 1 : null } : {};
+    const extraOpts = type === 'words' ? { len: opts.len, hard: opts.hard, mode: opts.mode || 'duel', word: opts.word, hint: opts.hint, by: opts.by, guesser: opts.mode === 'custom' ? 1 : null }
+      : type === 'fuse' ? Object.assign({}, opts.settings || {}, { variant: opts.variant, players: [{ name: 'Player 1' }, { name: 'Player 2' }] }) : {};
     const state = g.create(Object.assign({ seed, first: 0, clock: opts.mode === 'live' && opts.tc ? opts.tc : null }, extraOpts));
     const me = O.me();
     let seats;
@@ -498,6 +617,7 @@
   // ---------------------------------------------------------- match screen
   function names() {
     if (!match) return ['', ''];
+    if (match.type === 'fuse' && (match.room || match.fuseBots)) return match.state ? match.state.players.map(p => p.name) : [];
     if (match.solo) return [myName(), ''];
     if (match.local) return partner ? [myName(), partnerName()] : (match.type === 'chess' ? ['White', 'Black'] : ['Player 1', 'Player 2']);
     const seat = match.seat;
@@ -514,10 +634,10 @@
     match = Object.assign({ type, game: g, view: VIEWS[type], local: false, solo: false, gid: null, seat: 0, state: null, mine: null, theirs: null, rec: null }, extra);
     $('#p-title').textContent = match.bot ? `${g.name} vs ${levelName(match.bot.level)} bot` : g.name;
     $('#p-result').hidden = true;
-    if (match.from === 'menu') { try { history.pushState({ s: 'sub2' }, ''); } catch (e) { /* ignore */ } }
+    if (match.from === 'menu' && !(history.state && history.state.s === 'sub2')) { try { history.pushState({ s: 'sub2' }, ''); } catch (e) { /* ignore */ } }
     const ctx = {
       local: match.local, solo: match.solo, toast: BL.toast, send: submit,
-      mode: match.bot ? 'bot' : match.local ? 'local' : match.solo ? 'solo' : 'online',
+      mode: match.bot ? 'bot' : match.fuseBots ? 'bots' : match.local ? 'local' : match.solo ? 'solo' : 'online',
       thinking: () => !!(match && match.thinking),
       startLive: async () => {
         if (!match || !match.gid || !partner) return;
@@ -540,9 +660,15 @@
           <div class="actions"><button type="button" class="btn ${label === 'Resign' ? 'danger' : 'primary'} big" data-a="yes">${esc(label)}</button><button type="button" class="btn" data-a="no">Cancel</button></div>`,
         { onMount: b => { on(b, '[data-a=yes]', () => { BL.closeSheet(); fn(); }); on(b, '[data-a=no]', () => BL.closeSheet()); } });
       },
-      now: () => (match && !match.local && !match.solo ? O.now() : Date.now()),
+      now: () => (match && (match.local || match.solo || match.fuseBots) ? Date.now() : O.now()),
       partnerHere: () => !!(match && partnerOnline() && partnerOnline().game === match.gid),
-      setDraft: text => { if (match && match.gid && partner && !match.local) O.draft(partner.pid, match.gid, { seat: match.seat, text }).catch(() => {}); },
+      quiet: () => !!(match && match.rec && match.rec.screen),
+      setDraft: text => {
+        if (!match || match.local || match.fuseBots) return;
+        const d = { seat: match.seat, text, n: match.state ? match.state.n : 0 };
+        if (match.room) O.roomDraft(match.room, d).catch(() => {});
+        else if (match.gid && partner) O.draft(partner.pid, match.gid, d).catch(() => {});
+      },
     };
     Object.defineProperty(ctx, 'names', { get: names });
     match.ctx = ctx;
@@ -596,6 +722,8 @@
     const m = match;
     if (!m) return 'No game open.';
     const g = m.game;
+    if (m.fuseBots) return fuseApply(move, m.seat);
+    if (m.room) return roomSubmit(move);
     if (g.kind === 'turns') {
       if (m.rec && m.rec.status === 'over') return 'This game is over.';
       const actor = m.local ? g.turn(m.state) : m.seat;
@@ -653,6 +781,13 @@
   function renderPlayHead() {
     if (!match || $('#play').hidden) return;
     const g = match.game, s = match.state, n = names(), rec = match.rec;
+    if (match.type === 'fuse' && (match.room || match.fuseBots)) {
+      const vn = s.variant === 'last' ? 'Last Word' : 'Pass the fuse', bots = s.players.filter(p => p.bot).length;
+      $('#p-sub').textContent = match.room ? `Room ${match.room} · ${vn}${rec && rec.screen ? ' · on the TV' : ''}` : s.players.length === 1 ? 'Practice · survival' : `${vn} · ${bots} bot${bots === 1 ? '' : 's'}`;
+      $('#p-sub').classList.remove('live');
+      $('#p-players').innerHTML = '';
+      return;
+    }
     let sub = '';
     if (match.solo) sub = match.soloCfg && match.soloCfg.kind === 'daily' ? 'Daily word' : match.soloCfg && match.soloCfg.kind === 'link' ? `${s.by || 'A friend'}’s word` : 'Practice';
     else if (match.bot) sub = g.over(s) ? 'Game over' : match.thinking ? 'The bot is thinking…' : g.turn(s) === match.seat ? 'Your move' : 'Bot’s move';
@@ -672,7 +807,7 @@
     $('#p-sub').classList.toggle('live', !match.local && !match.solo && !!(partnerOnline() && partnerOnline().game === match.gid));
 
     const seats = [0, 1];
-    if (match.solo || match.type === 'chess' || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
+    if (match.solo || match.type === 'chess' || match.type === 'fuse' || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
     const label = i => {
       if (match.type === 'chess') return i === 0 ? 'White' : 'Black';
       if (match.type === 'eights') return `${s.hands[i].length} card${s.hands[i].length === 1 ? '' : 's'}`;
@@ -686,13 +821,14 @@
   }
 
   function renderMatch() {
-    if (!match) return;
+    if (!match || !match.state) return;
     const g = match.game, s = match.state;
     let snap;
     if (g.kind === 'turns') {
       const over = g.over(s) || (match.rec && match.rec.status === 'over');
-      const viewer = match.local ? (match.type === 'eights' ? g.turn(s) : 0) : match.seat;
-      snap = { state: s, viewer, canAct: !over && (match.local || g.turn(s) === match.seat), draft: match.draft };
+      const viewer = match.local ? (match.type === 'eights' || match.type === 'fuse' ? g.turn(s) : 0) : match.seat;
+      const can = match.local || (g.canAct ? g.canAct(s, match.seat) : g.turn(s) === match.seat);
+      snap = { state: s, viewer, canAct: !over && can, draft: match.draft };
     } else {
       const over = match.solo ? g.done(match.mine) : !!(match.rec && match.rec.status === 'over');
       snap = { state: s, viewer: match.seat, mine: match.mine, theirs: match.solo ? undefined : match.theirs, over, startAt: match.rec && match.rec.startAt };
@@ -704,6 +840,7 @@
 
   function renderResult() {
     const m = match, g = m.game, box = $('#p-result');
+    if (m.type === 'fuse' && window.BLMenus.fuse && window.BLMenus.fuse.renderResult(box, m)) return;
     if (m.soloCfg && m.soloCfg.result) {
       if (!g.done(m.mine)) { box.hidden = true; return; }
       m.soloCfg.result(box, m);
@@ -766,6 +903,9 @@
   function closeMatch(silent) {
     if (!match) return;
     try { match.inst && match.inst.destroy(); } catch (e) { /* ignore */ }
+    if (match.stopRoom) { try { match.stopRoom(); } catch (e) { /* ignore */ } }
+    if (match.room) O.roomHere(match.room, false).catch(() => {});
+    if (match.botPlans) Object.values(match.botPlans).forEach(pl => pl.timers.forEach(clearTimeout));
     $('#p-body').innerHTML = '';
     match = null;
     if (!silent && partner && net === 'ready') O.here(partner.pid, '').catch(() => {});
@@ -790,14 +930,16 @@
     if (!match) return;
     const m = match, g = m.game;
     const active = g.kind === 'turns' && !g.over(m.state) && !(m.rec && m.rec.status === 'over');
+    const shared = !m.local && !m.solo && !m.bot && !m.room && !m.fuseBots;
     const hasLook = window.BLMenus && window.BLMenus[m.type] && window.BLMenus[m.type].look;
     BL.openSheet(`
       <h2 id="sheet-title">${esc(g.name)}</h2>
       <div class="actions">
         ${hasLook ? '<button type="button" class="btn" data-a="look">Board and pieces</button>' : ''}
-        ${active && !m.local && !m.bot && m.type !== 'chess' ? '<button type="button" class="btn danger" data-a="resign">Resign</button>' : ''}
-        ${active && m.local ? '<button type="button" class="btn" data-a="restart">Start over</button>' : ''}
-        ${!m.local && !m.solo && !m.bot ? '<button type="button" class="btn" data-a="remove">Remove this game for both of you</button>' : ''}
+        ${active && shared && m.type !== 'chess' ? '<button type="button" class="btn danger" data-a="resign">Resign</button>' : ''}
+        ${active && (m.local || m.fuseBots) ? '<button type="button" class="btn" data-a="restart">Start over</button>' : ''}
+        ${shared ? '<button type="button" class="btn" data-a="remove">Remove this game for both of you</button>' : ''}
+        ${m.room ? '<button type="button" class="btn" data-a="leaveroom">Leave the room</button>' : ''}
         <button type="button" class="btn ghost" data-a="hub">${m.from === 'menu' ? 'Back to the menu' : 'Back to games'}</button>
       </div>`, {
       onMount: b => {
@@ -815,7 +957,8 @@
           });
         });
         on(b, '[data-a=look]', () => window.BLMenus[m.type].look(() => { if (match && match.inst.refresh) match.inst.refresh(); }));
-        on(b, '[data-a=restart]', () => { BL.closeSheet(); if (m.type === 'chess') BL.store.set('chessLocal', null); openLocal(m.type, m.from); });
+        on(b, '[data-a=restart]', () => { BL.closeSheet(); if (m.fuseBots) { startFuse(m.fuseCfg); return; } if (m.type === 'chess') BL.store.set('chessLocal', null); openLocal(m.type, m.from); });
+        on(b, '[data-a=leaveroom]', () => { BL.closeSheet(); const c = m.room; leave(); O.leaveRoom(c, false, false).catch(() => {}); });
         on(b, '[data-a=remove]', () => {
           BL.openSheet(`<h2 id="sheet-title">Remove this game?</h2><p class="lede">It disappears from both phones. This can’t be undone.</p>
             <div class="actions"><button type="button" class="btn danger big" data-a="yes">Remove game</button><button type="button" class="btn" data-a="no">Keep it</button></div>`, {
@@ -841,6 +984,13 @@
   BL.boot();
   connect();
   function handleLinkHash() {
+    const rm = location.hash.match(/^#room-([A-Za-z0-9]{5})$/);
+    if (rm) {
+      try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* ignore */ }
+      openMenu('fuse');
+      window.BLMenus.fuse.join(rm[1].toUpperCase(), menuApi);
+      return;
+    }
     const wl = location.hash.match(/^#w-([A-Za-z0-9_-]{6,200})$/);
     if (wl) {
       try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* ignore */ }
