@@ -13,7 +13,7 @@
   --on-blue: #FFFFFF;
   --lane: rgba(42, 100, 232, 0.15);   /* the blue lines: where the active number can't go */
   --peer: rgba(18, 32, 58, 0.055);
-  --same: rgba(42, 100, 232, 0.26);
+  --same: rgba(42, 100, 232, 0.17);
   --sel: rgba(42, 100, 232, 0.40);
   --red: #CF3B2A;
   --red-soft: rgba(207, 59, 42, 0.14);
@@ -31,7 +31,7 @@
   :root:not([data-theme="light"]) {
     --bg: #0A101B; --surface: #131B2A; --surface-2: #1C2638; --ink: #E5EBF5; --ink-2: #93A1B8;
     --hair: #2A3650; --box: #8C9CB8; --blue: #6F9BFF; --blue-press: #5A88F2; --on-blue: #0A101B;
-    --lane: rgba(111, 155, 255, 0.17); --peer: rgba(229, 235, 245, 0.05); --same: rgba(111, 155, 255, 0.30);
+    --lane: rgba(111, 155, 255, 0.17); --peer: rgba(229, 235, 245, 0.05); --same: rgba(111, 155, 255, 0.22);
     --sel: rgba(111, 155, 255, 0.42); --red: #FF6B58; --red-soft: rgba(255, 107, 88, 0.17);
     --green: #3BC48B; --amber: #E3A949; --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.3);
     color-scheme: dark;
@@ -40,7 +40,7 @@
 :root[data-theme="dark"] {
   --bg: #0A101B; --surface: #131B2A; --surface-2: #1C2638; --ink: #E5EBF5; --ink-2: #93A1B8;
   --hair: #2A3650; --box: #8C9CB8; --blue: #6F9BFF; --blue-press: #5A88F2; --on-blue: #0A101B;
-  --lane: rgba(111, 155, 255, 0.17); --peer: rgba(229, 235, 245, 0.05); --same: rgba(111, 155, 255, 0.30);
+  --lane: rgba(111, 155, 255, 0.17); --peer: rgba(229, 235, 245, 0.05); --same: rgba(111, 155, 255, 0.22);
   --sel: rgba(111, 155, 255, 0.42); --red: #FF6B58; --red-soft: rgba(255, 107, 88, 0.17);
   --green: #3BC48B; --amber: #E3A949; --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
@@ -260,7 +260,7 @@ svg { display: block; }
 .board.killer .cell .nt { padding-top: 26%; }
 .cell .nt i { font-style: normal; visibility: hidden; }
 .cell .nt i.on { visibility: visible; }
-.cell .nt i.hl { color: var(--on-blue); background: var(--blue); border-radius: 3px; padding: 0 1px; font-weight: 500; }
+.cell .nt i.hl { color: var(--blue); font-weight: 600; }
 .cell .v:empty { display: none; }
 .cell:not(.empty) .nt { display: none; }
 .cell .sum {

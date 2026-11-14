@@ -17,7 +17,7 @@
   };
   const STRIKES = 3;
   const DAILY_LEVEL = ['extreme', 'easy', 'medium', 'hard', 'hard', 'expert', 'expert']; // Sunday first
-  const VERSION = '1.0.1';
+  const VERSION = '1.0.2';
 
   // ------------------------------------------------------------- storage
   const store = {
@@ -139,7 +139,7 @@
   let G = null;              // the current game (saved to storage)
   let model = null, geo = null;
   let cells = [], keys = [];
-  let sel = -1, active = 0, notesMode = false, hintView = null, paused = false;
+  let sel = -1, active = 0, laneDigit = 0, notesMode = false, hintView = null, paused = false;
   let clockStart = 0, clockTimer = 0, saveTimer = 0;
 
   const playable = () => !!G && (G.status === 'playing' || G.status === 'practice') && !paused;
@@ -233,7 +233,7 @@
       mistakes: 0, hints: 0, elapsed: 0, status: 'playing', undo: [], redo: [],
       daily: extra.daily || null, race: extra.race || null, created: Date.now(),
     };
-    sel = -1; active = 0; notesMode = false; paused = false;
+    sel = -1; active = 0; laneDigit = 0; notesMode = false; paused = false;
     enterGame();
     if (!G.race) startClock();
     save();
@@ -335,13 +335,15 @@
     if (!G || !cells.length) return;
     const p = G.puzzle, N = p.size, C = N * N, sol = p.solution;
     const peerMask = new Uint8Array(C), lane = new Uint8Array(C);
-    if (settings.peers && sel >= 0) for (const x of geo.peers[sel]) peerMask[x] = 1;
-    if (active && settings.lanes) {
+    // Blue lines: only for a number picked on the pad, and only on empty cells it can't use.
+    const lanesOn = !!(laneDigit && settings.lanes);
+    if (settings.peers && sel >= 0 && !lanesOn) for (const x of geo.peers[sel]) peerMask[x] = 1;
+    if (lanesOn) {
       for (let c = 0; c < C; c++) {
-        if (G.vals[c] !== active || G.vals[c] !== sol[c]) continue;
+        if (G.vals[c] !== laneDigit || G.vals[c] !== sol[c]) continue;
         for (const u of geo.unitsOf[c]) {
           if (geo.kinds[u] === 'box' && !settings.laneBoxes) continue;
-          for (const x of geo.units[u]) lane[x] = 1;
+          for (const x of geo.units[u]) if (!G.vals[x]) lane[x] = 1;
         }
       }
     }
@@ -441,16 +443,23 @@
       return;
     }
     sel = c;
-    if (v) active = v;
+    if (v) {
+      active = v;
+      if (settings.inputMode === 'number') laneDigit = v;
+      else if (laneDigit !== v) laneDigit = 0;
+    }
     paint();
   }
 
   function tapKey(d) {
     if (!playable()) return;
     if (hintView) closeHint();
-    if (settings.inputMode === 'number') { active = active === d ? 0 : d; paint(); return; }
+    if (settings.inputMode === 'number') { active = active === d ? 0 : d; laneDigit = active; paint(); return; }
+    const editable = sel >= 0 && !isLocked(sel);
+    if (!editable && laneDigit === d) { laneDigit = 0; active = 0; paint(); return; } // tap again to clear
     active = d;
-    if (sel >= 0 && !isLocked(sel)) {
+    laneDigit = digitDone(d) ? 0 : d;
+    if (editable) {
       if (notesMode) { toggleNote(sel, d); return; }
       if (G.vals[sel] !== d && !digitDone(d)) { enter(sel, d); return; }
     }
@@ -470,6 +479,7 @@
     }
     pushUndo(before);
     active = d;
+    if (correct && laneDigit === d && digitDone(d)) laneDigit = 0; // all placed: nothing left to guide
     if (correct) { fx(c, 'pop'); celebrate(c); buzz(8); } else addMistake(c);
     afterChange();
   }
@@ -584,12 +594,12 @@
         if (k === 'ArrowRight') c = (c + 1) % N;
         sel = r * N + c;
       }
-      if (G.vals[sel]) active = G.vals[sel];
+      if (G.vals[sel]) { active = G.vals[sel]; if (laneDigit !== active) laneDigit = 0; }
       paint();
       return;
     }
     if (k === 'Backspace' || k === 'Delete' || (k === '0' && N <= 9)) { e.preventDefault(); if (sel >= 0) eraseCell(sel); return; }
-    if (k === 'Escape') { if (hintView) closeHint(); else { sel = -1; active = 0; paint(); } return; }
+    if (k === 'Escape') { if (hintView) closeHint(); else { sel = -1; active = 0; laneDigit = 0; paint(); } return; }
     const lower = k.toLowerCase();
     if (lower === 'n' || k === ' ') { e.preventDefault(); notesMode = !notesMode; updateHead(); return; }
     if (lower === 'u') { undo(); return; }
@@ -601,6 +611,7 @@
       const d = idx + 1;
       if (sel >= 0 && !isLocked(sel)) {
         active = d;
+        laneDigit = digitDone(d) ? 0 : d;
         if (notesMode) toggleNote(sel, d);
         else if (G.vals[sel] !== d && !digitDone(d)) enter(sel, d);
         else paint();
@@ -728,7 +739,7 @@
     G.status = 'won';
     G.finalTime = time;
     const last = sel >= 0 ? sel : 0;
-    sel = -1; active = 0;
+    sel = -1; active = 0; laneDigit = 0;
     closeHint();
     paint();
     waveFrom(last);
@@ -988,7 +999,7 @@
       <div class="field"><span>Theme</span>${seg('theme', { system: 'Auto', light: 'Light', dark: 'Dark' })}</div>
       <div class="field"><span>How you enter numbers</span>${seg('inputMode', { cell: 'Cell, then number', number: 'Number, then cells' })}</div>
       <div>
-        ${sw('lanes', 'Blue lines', 'Tap a number to shade every row and column it already sits in. The white cells left are where it can still go.')}
+        ${sw('lanes', 'Blue lines', 'Tap a number on the pad to shade the empty cells in every row and column it already sits in. The white cells left are where it can go. Tap the number again to clear.')}
         ${sw('laneBoxes', 'Shade boxes too', 'Blue lines also cover the boxes that already have that number.')}
         ${sw('sameNumbers', 'Highlight matching numbers', 'Every copy of the selected number lights up, notes included.')}
         ${sw('peers', 'Highlight row, column and box', 'Lightly shade the lines and box around the selected cell.')}
