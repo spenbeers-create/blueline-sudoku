@@ -127,19 +127,27 @@
     });
   }
 
-  let stopLobby = null;
-  function leaveRoom(code, lobbyPhase) {
+  // The lobby listener can fire before watchRoom returns, so each lobby gets a token
+  // and a listener that arrives after its lobby ended is switched straight off.
+  let stopLobby = null, lobbyToken = null;
+  function endLobby() {
+    lobbyToken = null;
     if (stopLobby) { stopLobby(); stopLobby = null; }
+  }
+  function leaveRoom(code, lobbyPhase) {
+    endLobby();
     O.ready().then(() => O.leaveRoom(code, false, lobbyPhase)).catch(() => {});
   }
   function lobby(code) {
-    if (stopLobby) { stopLobby(); stopLobby = null; }
+    endLobby();
+    const token = lobbyToken = {};
     O.roomHere(code).catch(() => {});
     const paint = r => {
-      if (!r) { BL.closeSheet(); BL.toast('The room closed.'); if (stopLobby) { stopLobby(); stopLobby = null; } return; }
+      if (lobbyToken !== token) return;
+      if (!r) { BL.closeSheet(); BL.toast('The room closed.'); endLobby(); return; }
       const me = O.me();
       if (r.status === 'playing' && Array.isArray(r.seats) && r.seats.includes(me)) {
-        if (stopLobby) { stopLobby(); stopLobby = null; }
+        endLobby();
         BL.closeSheet();
         api.openRoom(code, r.seats.indexOf(me));
         return;
@@ -148,7 +156,7 @@
       const st = r.settings || {}, need = r.screen ? 1 : 2;
       BL.openSheet(`
         <h2 id="sheet-title">Room ${esc(code)}</h2>
-        <p class="lede">${esc((VARIANTS[st.variant] || VARIANTS.pass).name)} · ${st.lives || 3} lives · ${esc(st.difficulty || 'normal')} letters${r.screen ? ' · on the TV' : ''}</p>
+        <p class="lede">${esc((VARIANTS[st.variant] || VARIANTS.pass).name)} · ${st.lives || 3} ${(st.lives || 3) === 1 ? 'life' : 'lives'} · ${esc(st.difficulty || 'normal')} letters${r.screen ? ' · on the TV' : ''}</p>
         <div class="room-players">${players.map(([uid, p]) => `<span class="room-p${uid === me ? ' me' : ''}"><i>${esc((p.name || '?')[0].toUpperCase())}</i>${esc(p.name || 'Player')}${uid === me ? ' (you)' : ''}</span>`).join('') || '<span class="muted">Nobody yet</span>'}</div>
         <div class="actions row"><button type="button" class="btn" data-a="share">Invite</button><button type="button" class="btn" data-a="copy">Copy code</button></div>
         <div class="actions">
@@ -165,7 +173,10 @@
         },
       });
     };
-    O.ready().then(() => { stopLobby = O.watchRoom(code, paint); }).catch(e => BL.toast(roomErr(e)));
+    O.ready().then(() => {
+      const off = O.watchRoom(code, paint);
+      if (lobbyToken === token) stopLobby = off; else off();
+    }).catch(e => BL.toast(roomErr(e)));
   }
   // Anyone in the room (or the TV) can start it.
   async function startRoom(code) {
