@@ -65,7 +65,7 @@ for (const [label, s, counts] of perfts) {
 
 // ---- Crazy Eights: random games always end, cards are conserved
 for (let g = 0; g < 300; g++) {
-  let s = eights.create({ seed: 'g' + g });
+  let s = eights.create({ seed: 'g' + g, rules: false });   // plain rules; house rules are in test-eights.js
   let steps = 0;
   while (!eights.over(s) && steps++ < 2000) {
     const p = s.turn, hand = s.hands[p];

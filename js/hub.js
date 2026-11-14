@@ -14,7 +14,7 @@
     { id: 'words', cat: 'Words', players: '2 players' },
     { id: 'four', cat: 'Board', players: '2 players · TV mode' },
     { id: 'chess', cat: 'Board', players: '2 players' },
-    { id: 'eights', cat: 'Cards', players: '2 players' },
+    { id: 'eights', cat: 'Cards', players: 'Up to 6 · TV mode' },
   ].map(c => Object.assign({ name: GAMES[c.id] && GAMES[c.id].name, blurb: GAMES[c.id] && GAMES[c.id].blurb }, c));
   const COMING = ['Checkers', 'Dots and Boxes', 'Sea Battle', 'Go Fish', 'Gin Rummy', 'Speed', 'Hangman', 'Word Tiles', 'Minesweeper race', '2048 race', 'Memory Match'];
 
@@ -96,7 +96,7 @@
         BL.toast(`${gameName(r.type)} with ${partnerName()} is finished`, { label: 'See', run: () => openOnline(gid) });
       }
     }
-    for (const [gid, r] of Object.entries(games)) if ((r.type === 'chess' || r.type === 'four') && r.status === 'over' && r.winner != null) recordOnline(r.type, gid, r);
+    for (const [gid, r] of Object.entries(games)) if ((r.type === 'chess' || r.type === 'four' || r.type === 'eights') && r.status === 'over' && r.winner != null) recordOnline(r.type, gid, r);
     for (const [gid, r] of Object.entries(games)) if (r.type === 'words' && r.status === 'over' && r.winner != null && window.BLMenus.words) window.BLMenus.words.recordDuel(gid, r, mySeat(r));
     firstLoad = false;
     renderHub();
@@ -325,6 +325,8 @@
     link: () => openLink(),
     openSolo: (type, cfg) => openSolo(type, cfg),
     startFuse: cfg => startFuse(cfg),
+    startCards: cfg => startCards(cfg),
+    resumeCards: () => resumeCards(),
     openRoom: (code, seat, type) => openRoom(code, seat, type),
     openMenu: type => openMenu(type),
     menuId: () => menuId,
@@ -433,7 +435,7 @@
     st.partner[k] = (st.partner[k] || 0) + 1;
     BL.store.set(type + 'Stats', st);
   }
-  const LOCAL_SAVE = ['chess', 'four'];
+  const LOCAL_SAVE = ['chess', 'four', 'eights'];
   function resumeLocal(type) {
     const saved = BL.store.get(type + 'Local', null);
     if (!saved || !saved.state) { openLocal(type, 'menu'); return; }
@@ -568,6 +570,56 @@
     return '';
   }
 
+  // ------------------------------------------------- crazy eights: bots
+  // Bots take their turns with a short pause (quicker when they keep drawing).
+  // The game is saved after every card so it can be picked up later.
+  function startCards(cfg) {
+    const E = GAMES.eights;
+    buildMatch('eights', { cardBots: true, seat: 0, from: 'menu', cardCfg: cfg });
+    match.state = E.create({ seed: Math.random().toString(36).slice(2), players: cfg.players, rules: cfg.rules, first: Math.floor(Math.random() * cfg.players.length) });
+    saveCards();
+    renderMatch();
+    runCardBots();
+  }
+  function resumeCards() {
+    const saved = BL.store.get('eightsBot', null);
+    if (!saved || !saved.state) return;
+    buildMatch('eights', { cardBots: true, seat: 0, from: 'menu', cardCfg: saved.cfg || {} });
+    match.state = saved.state;
+    renderMatch();
+    runCardBots();
+  }
+  function saveCards() { if (match && match.cardBots) BL.store.set('eightsBot', { cfg: match.cardCfg, state: match.state, at: Date.now() }); }
+  function cardApply(move, p) {
+    const m = match;
+    if (!m) return 'No game open.';
+    const g = m.game;
+    if (!g.legal(m.state, move, p)) return 'That move isn’t allowed.';
+    m.state = g.apply(m.state, move, p);
+    if (p === m.seat && BL.buzz) BL.buzz(8);
+    saveCards();
+    renderMatch();
+    runCardBots();
+    return '';
+  }
+  function runCardBots() {
+    const m = match;
+    if (!m || !m.cardBots) return;
+    clearTimeout(m.botT);
+    const s = m.state, g = m.game;
+    if (g.over(s)) return;
+    const p = s.turn, pl = s.players && s.players[p];
+    if (!pl || !pl.bot) return;
+    const last = s.log[s.log.length - 1];
+    const again = last && last.p === p && last.draw && !last.penalty;
+    m.botT = setTimeout(() => {
+      if (match !== m || m.state !== s) return;
+      let mv = g.botMove(s, p, pl.bot);
+      if (!g.legal(s, mv, p)) mv = g.legalMoves(s)[0];
+      if (mv) cardApply(mv, p);
+    }, again ? 550 : 950 + Math.random() * 700);
+  }
+
   function openGameSheet(id) {
     if (id === 'sudoku') { BL.show('home'); return; }
     if (window.BLMenus && window.BLMenus[id]) { openMenu(id); return; }
@@ -604,12 +656,13 @@
     const seed = O.code(10);
     if (!opts && swapFrom) {
       const prev = parse(swapFrom.state) || {};
-      opts = { mode: swapFrom.mode, tc: swapFrom.tcSpec || null, len: prev.len, hard: prev.hard, variant: prev.variant, settings: prev.settings, size: prev.size };
+      opts = { mode: swapFrom.mode, tc: swapFrom.tcSpec || null, len: prev.len, hard: prev.hard, variant: prev.variant, settings: prev.settings, size: prev.size, rules: prev.rules };
     }
     opts = opts || {};
     const extraOpts = type === 'words' ? { len: opts.len, hard: opts.hard, mode: opts.mode || 'duel', word: opts.word, hint: opts.hint, by: opts.by, guesser: opts.mode === 'custom' ? 1 : null }
       : type === 'fuse' ? Object.assign({}, opts.settings || {}, { variant: opts.variant, players: [{ name: 'Player 1' }, { name: 'Player 2' }] })
-      : type === 'four' ? { size: opts.size } : {};
+      : type === 'four' ? { size: opts.size }
+      : type === 'eights' ? { rules: opts.rules || false } : {};
     const state = g.create(Object.assign({ seed, first: 0, clock: opts.mode === 'live' && opts.tc ? opts.tc : null }, extraOpts));
     const me = O.me();
     let seats;
@@ -632,6 +685,7 @@
   function names() {
     if (!match) return ['', ''];
     if (match.type === 'fuse' && (match.room || match.fuseBots)) return match.state ? match.state.players.map(p => p.name) : [];
+    if (match.type === 'eights' && (match.cardBots || match.room) && match.state && match.state.players) return match.state.players.map(p => p.name);
     if (match.room) return match.roomNames || ['Player 1', 'Player 2'];
     if (match.solo) return [myName(), ''];
     if (match.local) return partner ? [myName(), partnerName()] : (match.type === 'chess' ? ['White', 'Black'] : ['Player 1', 'Player 2']);
@@ -652,7 +706,7 @@
     if (match.from === 'menu' && !(history.state && history.state.s === 'sub2')) { try { history.pushState({ s: 'sub2' }, ''); } catch (e) { /* ignore */ } }
     const ctx = {
       local: match.local, solo: match.solo, toast: BL.toast, send: submit,
-      mode: match.bot ? 'bot' : match.fuseBots ? 'bots' : match.local ? 'local' : match.solo ? 'solo' : 'online',
+      mode: match.bot ? 'bot' : match.fuseBots || match.cardBots ? 'bots' : match.local ? 'local' : match.solo ? 'solo' : 'online',
       thinking: () => !!(match && match.thinking),
       startLive: async () => {
         if (!match || !match.gid || !partner) return;
@@ -739,6 +793,7 @@
     if (!m) return 'No game open.';
     const g = m.game;
     if (m.fuseBots) return fuseApply(move, m.seat);
+    if (m.cardBots) return cardApply(move, m.seat);
     if (m.room) return roomSubmit(move);
     if (g.kind === 'turns') {
       if (m.rec && m.rec.status === 'over') return 'This game is over.';
@@ -807,6 +862,7 @@
     let sub = '';
     if (match.solo) sub = match.soloCfg && match.soloCfg.kind === 'daily' ? 'Daily word' : match.soloCfg && match.soloCfg.kind === 'link' ? `${s.by || 'A friend'}’s word` : 'Practice';
     else if (match.bot) sub = g.over(s) ? 'Game over' : match.thinking ? 'The bot is thinking…' : g.turn(s) === match.seat ? 'Your move' : 'Bot’s move';
+    else if (match.cardBots) { const b = s.players.length - 1; sub = `${b} bot${b === 1 ? '' : 's'} · ${g.over(s) ? 'Game over' : g.turn(s) === match.seat ? 'Your turn' : `${n[g.turn(s)]}’s turn`}`; }
     else if (match.local) sub = g.over(s) ? 'On this phone' : `On this phone · ${n[g.turn(s)]}’s turn`;
     else if (match.room) sub = `Room ${match.room}${rec && rec.screen ? ' · on the TV' : ''} · ${g.over(s) ? 'Game over' : g.turn(s) === match.seat ? 'Your turn' : `${n[g.turn(s)]}’s turn`}`;
     else {
@@ -824,7 +880,7 @@
     $('#p-sub').classList.toggle('live', !match.local && !match.solo && !!(partnerOnline() && partnerOnline().game === match.gid));
 
     const seats = [0, 1];
-    if (match.solo || match.type === 'chess' || match.type === 'fuse' || match.type === 'four' || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
+    if (match.solo || ['chess', 'fuse', 'four', 'eights'].includes(match.type) || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
     const label = i => {
       if (match.type === 'chess') return i === 0 ? 'White' : 'Black';
       if (match.type === 'eights') return `${s.hands[i].length} card${s.hands[i].length === 1 ? '' : 's'}`;
@@ -858,6 +914,7 @@
   function renderResult() {
     const m = match, g = m.game, box = $('#p-result');
     if (m.type === 'fuse' && window.BLMenus.fuse && window.BLMenus.fuse.renderResult(box, m)) return;
+    if (m.cardBots && window.BLMenus.eights && window.BLMenus.eights.renderResult(box, m, menuApi)) return;
     if (m.room) {
       if (!g.over(m.state)) { box.hidden = true; return; }
       const n = names(), w = g.winner(m.state), r = m.rec || {};
@@ -925,7 +982,7 @@
       if (m.bot) startBot({ type: m.type, level: m.bot.level, seat: m.type === 'four' ? 1 - m.seat : m.seat, opts: m.botOpts });
       else if (m.local || m.solo) {
         if (LOCAL_SAVE.includes(m.type)) BL.store.set(m.type + 'Local', null);
-        openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size, first: 1 - (m.state.first || 0) } : undefined);
+        openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size, first: 1 - (m.state.first || 0) } : m.type === 'eights' ? { rules: m.state.rules || false } : undefined);
       }
       else startOnline(m.type, Object.assign({ gid: m.gid }, m.rec));
     });
@@ -939,6 +996,7 @@
     if (match.stopRoom) { try { match.stopRoom(); } catch (e) { /* ignore */ } }
     if (match.room) O.roomHere(match.room, false).catch(() => {});
     if (match.botPlans) Object.values(match.botPlans).forEach(pl => pl.timers.forEach(clearTimeout));
+    clearTimeout(match.botT);
     $('#p-body').innerHTML = '';
     match = null;
     if (!silent && partner && net === 'ready') O.here(partner.pid, '').catch(() => {});
@@ -971,7 +1029,7 @@
       <div class="actions">
         ${hasLook ? `<button type="button" class="btn" data-a="look">${esc(lookLabel)}</button>` : ''}
         ${active && shared && m.type !== 'chess' ? '<button type="button" class="btn danger" data-a="resign">Resign</button>' : ''}
-        ${active && (m.local || m.fuseBots || m.bot) ? '<button type="button" class="btn" data-a="restart">Start over</button>' : ''}
+        ${active && (m.local || m.fuseBots || m.cardBots || m.bot) ? '<button type="button" class="btn" data-a="restart">Start over</button>' : ''}
         ${shared ? '<button type="button" class="btn" data-a="remove">Remove this game for both of you</button>' : ''}
         ${m.room ? '<button type="button" class="btn" data-a="leaveroom">Leave the room</button>' : ''}
         <button type="button" class="btn ghost" data-a="hub">${m.from === 'menu' ? 'Back to the menu' : 'Back to games'}</button>
@@ -994,9 +1052,10 @@
         on(b, '[data-a=restart]', () => {
           BL.closeSheet();
           if (m.fuseBots) { startFuse(m.fuseCfg); return; }
+          if (m.cardBots) { startCards(m.cardCfg); return; }
           if (m.bot) { startBot({ type: m.type, level: m.bot.level, seat: m.seat, opts: m.botOpts }); return; }
           if (LOCAL_SAVE.includes(m.type)) BL.store.set(m.type + 'Local', null);
-          openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size } : undefined);
+          openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size } : m.type === 'eights' ? { rules: m.state.rules || false } : undefined);
         });
         on(b, '[data-a=leaveroom]', () => { BL.closeSheet(); const c = m.room; leave(); O.leaveRoom(c, false, false).catch(() => {}); });
         on(b, '[data-a=remove]', () => {

@@ -13,7 +13,10 @@ both in the app, and take-your-turn when you're not.
 - **Four in a Row**: drop discs and line up four. Four bot levels (Easy to Expert) with Undo and Hint, three
   board sizes, live or take-turns games with your partner, rooms for anyone with a code, warnings where
   someone can win next, and your own disc colors, board and disc style.
-- **Crazy Eights**: match the suit or number, eights are wild, first to empty their hand wins.
+- **Crazy Eights**: match the suit or number, eights are wild, first to empty their hand wins. 2 to 6 players:
+  1 to 5 bots (Easy, Normal, Hard), party rooms, your partner, or pass and play. House rules: twos make the
+  next player draw (and stack), queens skip, aces reverse, draw one or draw till you can, hand size. Table
+  color, card backs, four-color suits and big corners.
 - **Word Duel**: guess the secret word in 4 to 7 letters. A daily word with streaks and a guess chart, practice,
   hard mode and high-contrast colors. With your partner: duels (fewer guesses wins), live races (first to solve
   wins) and words you pick for each other. Make a word and share a link anyone can play.
@@ -22,7 +25,7 @@ both in the app, and take-your-turn when you're not.
   a life back. Two ways to play: Pass the fuse, or Last Word (everyone types at once and the last one in
   loses a life). Play bots (three skill levels), practice alone, challenge your partner, or open a
   party room for up to 8 phones.
-- **TV mode** (Short Fuse and Four in a Row): open Blueline in a TV's web browser, or on a laptop plugged into the
+- **TV mode** (Short Fuse, Four in a Row and Crazy Eights): open Blueline in a TV's web browser, or on a laptop plugged into the
   TV, and tap TV mode. The screen shows a room code and QR code, everyone joins on their phones, and the
   letters, lives and live typing play out on the big screen.
 
@@ -56,6 +59,7 @@ node tools/test-chess-ai.js      # the chess bot: perft, legal moves, mates, str
 node tools/test-words.js         # Word Duel
 node tools/test-fuse.js          # Short Fuse
 node tools/test-four.js          # Four in a Row sizes and bot levels
+node tools/test-eights.js        # Crazy Eights house rules, 2-6 players, bots
 ```
 
 Word lists come from SCOWL via the `wordlist-english` package; the scripts in `tools/`
