@@ -17,7 +17,7 @@
   };
   const STRIKES = 3;
   const DAILY_LEVEL = ['extreme', 'easy', 'medium', 'hard', 'hard', 'expert', 'expert']; // Sunday first
-  const VERSION = '1.0.2';
+  const VERSION = '1.0.3';
 
   // ------------------------------------------------------------- storage
   const store = {
@@ -25,8 +25,11 @@
     set(k, v) { try { localStorage.setItem('bl:' + k, JSON.stringify(v)); } catch (e) { /* storage full or blocked */ } },
   };
 
-  const DEFAULTS = { theme: 'system', inputMode: 'cell', lanes: true, laneBoxes: false, sameNumbers: true, peers: true, autoClear: true, strikes: true, timer: true, haptics: true, name: '' };
-  const settings = Object.assign({}, DEFAULTS, store.get('settings', {}));
+  const DEFAULTS = { v: 2, theme: 'system', inputMode: 'cell', lanes: false, laneBoxes: false, sameNumbers: true, peers: true, autoClear: true, strikes: true, timer: true, haptics: true, name: '' };
+  const storedSettings = store.get('settings', {});
+  const settings = Object.assign({}, DEFAULTS, storedSettings);
+  // v2 switched to classic selection highlighting; the blue lines became an opt-in extra.
+  if ((storedSettings.v || 1) < 2) { settings.lanes = false; settings.v = 2; store.set('settings', settings); }
   const pick = Object.assign({ variant: 'classic', size: 9, difficulty: 'medium' }, store.get('pick', {}));
   const stats = store.get('stats', {});
   const daily = Object.assign({ done: {}, streak: 0, best: 0, last: '' }, store.get('daily', {}));
@@ -392,7 +395,7 @@
       const left = N - counts[d];
       k.kc.textContent = left > 0 ? left : '';
       k.el.classList.toggle('done', left <= 0);
-      k.el.classList.toggle('active', active === d);
+      k.el.classList.toggle('active', active === d && (settings.inputMode === 'number' || sel < 0));
     }
     const ok = playable();
     $('#t-undo').disabled = !ok || !G.undo.length;
@@ -442,12 +445,11 @@
       else paint();
       return;
     }
+    // Like most Sudoku apps: the tapped cell's row, column and box light up, plus every
+    // copy of its number. An empty cell clears the number highlight.
     sel = c;
-    if (v) {
-      active = v;
-      if (settings.inputMode === 'number') laneDigit = v;
-      else if (laneDigit !== v) laneDigit = 0;
-    }
+    active = v && v === G.puzzle.solution[c] ? v : 0;
+    if (settings.inputMode === 'number' || laneDigit !== active) laneDigit = active;
     paint();
   }
 
@@ -456,13 +458,19 @@
     if (hintView) closeHint();
     if (settings.inputMode === 'number') { active = active === d ? 0 : d; laneDigit = active; paint(); return; }
     const editable = sel >= 0 && !isLocked(sel);
-    if (!editable && laneDigit === d) { laneDigit = 0; active = 0; paint(); return; } // tap again to clear
-    active = d;
-    laneDigit = digitDone(d) ? 0 : d;
     if (editable) {
       if (notesMode) { toggleNote(sel, d); return; }
+      laneDigit = digitDone(d) ? 0 : d;
       if (G.vals[sel] !== d && !digitDone(d)) { enter(sel, d); return; }
+      active = d;
+      paint();
+      return;
     }
+    // Nothing to fill in: drop the old selection and show every copy of this number.
+    // Tapping the same number again clears it.
+    active = sel < 0 && active === d ? 0 : d;
+    sel = -1;
+    laneDigit = active && !digitDone(active) ? active : 0;
     paint();
   }
 
@@ -594,7 +602,8 @@
         if (k === 'ArrowRight') c = (c + 1) % N;
         sel = r * N + c;
       }
-      if (G.vals[sel]) { active = G.vals[sel]; if (laneDigit !== active) laneDigit = 0; }
+      active = G.vals[sel] && G.vals[sel] === G.puzzle.solution[sel] ? G.vals[sel] : 0;
+      if (laneDigit !== active) laneDigit = 0;
       paint();
       return;
     }
@@ -999,7 +1008,7 @@
       <div class="field"><span>Theme</span>${seg('theme', { system: 'Auto', light: 'Light', dark: 'Dark' })}</div>
       <div class="field"><span>How you enter numbers</span>${seg('inputMode', { cell: 'Cell, then number', number: 'Number, then cells' })}</div>
       <div>
-        ${sw('lanes', 'Blue lines', 'Tap a number on the pad to shade the empty cells in every row and column it already sits in. The white cells left are where it can go. Tap the number again to clear.')}
+        ${sw('lanes', 'Blue lines', 'Extra help when you tap a number: also shade the empty cells in every row and column it already sits in. The white cells left are where it can go.')}
         ${sw('laneBoxes', 'Shade boxes too', 'Blue lines also cover the boxes that already have that number.')}
         ${sw('sameNumbers', 'Highlight matching numbers', 'Every copy of the selected number lights up, notes included.')}
         ${sw('peers', 'Highlight row, column and box', 'Lightly shade the lines and box around the selected cell.')}
