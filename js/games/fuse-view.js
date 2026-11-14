@@ -64,7 +64,7 @@
         </div>`;
       const input = el.querySelector('#fz-in'), note = el.querySelector('.fz-note'), form = el.querySelector('.fz-form');
       const startBox = el.querySelector('.fz-start'), boomBox = el.querySelector('.fz-boom'), stage = el.querySelector('.fz-stage');
-      let typedFor = -1;
+      let lastKey = 0, holdAt = 0;
       let snap = null, dictReady = F.hasDictionary(), dictError = false, boomSent = 0, seenLog = -1, draftT = 0, lastTurnKey = '';
       F.loadDictionary().then(() => { dictReady = true; paint(); }).catch(() => { dictError = true; paint(); });
 
@@ -87,12 +87,8 @@
       });
       input.addEventListener('input', () => {
         note.textContent = '';
-        // Starting to type holds the fuse for a few seconds so you can finish.
-        const s = snap && snap.state;
-        if (s && snap.canAct && input.value && s.variant !== 'last' && s.typed !== s.n && typedFor !== s.n) {
-          const now = ctx.now();
-          if (now >= (s.roundStart || 0) && now < s.fuseEnd) { typedFor = s.n; ctx.send({ typing: true, at: now }); }
-        }
+        // Every letter keeps the fuse lit for you (the tick below asks for more time).
+        if (snap && snap.canAct) lastKey = ctx.now();
         clearTimeout(draftT);
         draftT = setTimeout(() => ctx.setDraft(input.value.slice(0, 30)), 100);
       });
@@ -112,7 +108,17 @@
           el.querySelector('.fz-clock i').style.width = (paused ? 100 : Math.round(100 * left / total)) + '%';
           el.querySelector('.fz-clock').classList.toggle('low', !paused && left < 3000);
           if (now >= s.deadline && boomSent !== s.round) { boomSent = s.round; ctx.send({ timeout: true, round: s.round, at: now }); }
-        } else if (now >= s.fuseEnd && boomSent !== s.round) { boomSent = s.round; ctx.send({ boom: true, round: s.round, at: now }); }
+        } else {
+          // While you're typing, ask for more fuse before it runs low (only near the end,
+          // so a normal turn sends nothing extra).
+          if (snap.canAct && !paused && input.value && now - lastKey < 2000 && s.fuseEnd - now < 2600 && now < s.fuseEnd && now - holdAt > 700 && (s.heldN !== s.n || (s.held || 0) < F.MAX_HOLD)) {
+            holdAt = now;
+            ctx.send({ typing: true, at: now });
+          }
+          // Other phones wait a moment longer, so a hold that's still on its way wins.
+          const wait = snap.canAct ? 0 : 600;
+          if (now >= s.fuseEnd + wait && boomSent !== s.round) { boomSent = s.round; ctx.send({ boom: true, round: s.round, at: now }); }
+        }
         if (input.disabled !== (!snap.canAct || paused || !dictReady)) paint();
       }, 120);
 

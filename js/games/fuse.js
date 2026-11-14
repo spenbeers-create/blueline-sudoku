@@ -10,8 +10,9 @@
   'use strict';
   const GAMES = root.BLGames || (root.BLGames = {});
   const PAUSE = 2200;
-  const GRACE = 3500;    // the fuse never blows within this long of reaching you
-  const TYPING = 5000;   // once you start typing, it waits at least this long
+  const GRACE = 3500;     // the fuse never blows within this long of reaching you
+  const KEEP = 3500;      // every letter you type keeps it lit at least this much longer
+  const MAX_HOLD = 20000; // most extra time typing can add in one turn, so nobody stalls forever
   const BONUS = 'abcdefghiklmnoprstuvwy';   // every letter except j, q, x, z
   let dict = null, dictArr = null, dictP = null, prompts = null, common = null;
 
@@ -93,7 +94,7 @@
   const logic = {
     id: 'fuse', name: 'Short Fuse', category: 'words', kind: 'turns', live: true, local: true,
     blurb: 'Type a word with the letters before the fuse burns out. Play with friends or bots.',
-    LIVES: 3, PAUSE, BONUS, GRACE, TYPING,
+    LIVES: 3, PAUSE, BONUS, GRACE, KEEP, MAX_HOLD,
     setDictionary(words) { dict = words instanceof Set ? words : new Set(words); dictArr = null; },
     setCommon(words) { common = words; },
     hasDictionary: () => !!dict,
@@ -145,8 +146,8 @@
     legal(s, m, p) {
       if (!m || s.winner != null) return false;
       if (m.start) return !s.started;
-      // First keystroke on your turn: the fuse waits for you to finish (once a turn).
-      if (m.typing) return s.variant !== 'last' && s.started && p === s.turn && s.typed !== s.n && m.at >= (s.roundStart || 0) - 300 && m.at < s.fuseEnd;
+      // Typing on your turn keeps the fuse lit so you can finish your word.
+      if (m.typing) return s.variant !== 'last' && s.started && p === s.turn && m.at >= (s.roundStart || 0) - 300 && m.at < s.fuseEnd && (s.heldN !== s.n || (s.held || 0) < MAX_HOLD);
       if (s.variant === 'last') {
         if (m.timeout) return s.started && m.round === s.round && m.at >= s.deadline;
         if (m.word != null) return s.started && !!s.players[p] && s.players[p].lives > 0 && !(s.done || {})[p] && m.at >= s.roundStart - 300 && m.at < s.deadline && !logic.problem(s, m.word);
@@ -166,7 +167,13 @@
         s.deadline = s.roundStart + (st.limit || 12000);
         return s;
       }
-      if (m.typing) { s.typed = s.n; s.fuseEnd = Math.max(s.fuseEnd, m.at + TYPING); return s; }
+      if (m.typing) {
+        if (s.heldN !== s.n) { s.heldN = s.n; s.held = 0; }
+        const end = Math.min(Math.max(s.fuseEnd, m.at + KEEP), s.fuseEnd + (MAX_HOLD - s.held));
+        s.held += end - s.fuseEnd;
+        s.fuseEnd = end;
+        return s;
+      }
       if (s.variant === 'last') return applyLast(s, m, p, st);
       if (m.word != null) {
         const w = clean(m.word);

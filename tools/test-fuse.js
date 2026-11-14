@@ -135,12 +135,22 @@ ok(thin.length === 0, 'thin prompts: ' + thin.slice(0, 5).join(','));
   ok(g.turn === 1 && g.fuseEnd === late + fuse.GRACE, 'fuse reaching you with 0.2s left gives you the grace period');
   ok(!fuse.legal(g, { boom: true, round: g.round, at: late + 1000 }, 0), 'no boom during the grace period');
   ok(!fuse.legal(g, { typing: true, at: late + 500 }, 0), 'only the holder can hold the fuse');
-  ok(fuse.legal(g, { typing: true, at: late + 1000 }, 1), 'the holder starting to type is allowed');
+  ok(fuse.legal(g, { typing: true, at: late + 1000 }, 1), 'the holder typing is allowed');
   g = fuse.apply(g, { typing: true, at: late + 1000 }, 1);
-  ok(g.fuseEnd === late + 1000 + fuse.TYPING, 'typing makes the fuse wait');
-  ok(!fuse.legal(g, { typing: true, at: late + 2000 }, 1), 'only once a turn');
-  ok(!fuse.legal(g, { boom: true, round: g.round, at: late + 4000 }, 0), 'no boom while they finish typing');
-  ok(fuse.legal(g, { word: find(g), at: late + 5500 }, 1), 'they can still send their word');
+  ok(g.fuseEnd === late + 1000 + fuse.KEEP, 'a letter keeps the fuse lit');
+  ok(fuse.legal(g, { typing: true, at: late + 4000 }, 1), 'every letter counts, not just the first');
+  g = fuse.apply(g, { typing: true, at: late + 4000 }, 1);
+  ok(g.fuseEnd === late + 4000 + fuse.KEEP, 'the next letter keeps it lit again');
+  ok(!fuse.legal(g, { boom: true, round: g.round, at: late + 7000 }, 0), 'no boom while they keep typing');
+  ok(fuse.legal(g, { word: find(g), at: late + 7200 }, 1), 'they can still send their word');
+  // Nobody can stall forever: typing adds at most MAX_HOLD in one turn.
+  let t = late + 4000, guard = 0;
+  while (fuse.legal(g, { typing: true, at: t + 3000 }, 1) && guard++ < 50) { t += 3000; g = fuse.apply(g, { typing: true, at: t }, 1); }
+  ok(guard < 50 && g.held <= fuse.MAX_HOLD && g.held >= fuse.MAX_HOLD - fuse.KEEP, `typing time is capped (${g.held} ms)`);
+  ok(fuse.legal(g, { boom: true, round: g.round, at: g.fuseEnd }, 0), 'the fuse blows once the cap is used up');
+  // The next player starts fresh.
+  g = fuse.apply(g, { word: find(g), at: g.fuseEnd - 10 }, 1);
+  ok(fuse.legal(g, { typing: true, at: g.fuseEnd - 100 }, g.turn), 'the cap resets for the next player');
   // A long fuse isn't shortened by any of this.
   let h = fuse.create({ seed: 'grace2', players: [{ name: 'A' }, { name: 'B' }] });
   h = fuse.apply(h, { start: true, at: 0 }, 0);

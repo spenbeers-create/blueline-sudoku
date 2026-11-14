@@ -86,7 +86,7 @@
           if (now >= s.deadline && sent !== 't' + s.round) { sent = 't' + s.round; send({ timeout: true, round: s.round, at: now }); }
         } else {
           if (!paused && now - lastTick >= 500) { lastTick = now; snd('tick'); }
-          if (now >= s.fuseEnd && sent !== 'b' + s.round) { sent = 'b' + s.round; send({ boom: true, round: s.round, at: now }); }
+          if (now >= s.fuseEnd + 600 && sent !== 'b' + s.round) { sent = 'b' + s.round; send({ boom: true, round: s.round, at: now }); }
         }
       }, 100);
 
