@@ -31,9 +31,11 @@ both in the app, and take-your-turn when you're not.
 - **More or Less**: higher or lower. You see how many people look up a topic on Wikipedia each month; did
   the next one get more or less? Everyone answers at once with 3 lives, and whoever lasts longest wins. Alone,
   see how many you can get right. 304 topics, numbers from the Wikimedia pageviews API (`tools/gen-moreless.py`).
-- **Measure Up**: you see how tall one thing is; guess the height of the next. Slide your guess, lock in, and
-  see everyone's guess beside the real height. Points for being close (100 for spot on), plus 20 for the
-  closest guess. Most points after 5, 10 or 15 rounds wins. Feet or meters.
+- **Measure Up**: you see how tall one thing is; guess the height of the next. Both stand side by side as
+  silhouettes on one ground line, to scale: the one you know in blue, the one you size in red. Slide (or drag
+  the red one, or nudge it with − and +), zoom in or out, lock in. The reveal grows the real height and marks
+  everyone's guess with a dashed line. Points for being close (100 for spot on), plus 20 for the closest
+  guess. Most points after 5, 10 or 15 rounds wins. Feet or meters.
 - **TV mode** (every game): open Blueline in a TV's web browser, or on a laptop plugged into the TV, and
   tap TV mode in any game's menu. The screen shows a room code and QR code, everyone joins on their
   phones, and the game plays out on the big screen: Short Fuse letters and lives, the Four in a Row board,

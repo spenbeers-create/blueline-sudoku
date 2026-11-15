@@ -1,8 +1,9 @@
 /* The big screen for the answer-at-once games.
    More or Less: both topics huge, who has locked in, then the hidden number counts
    up and everyone's pick lights up right or wrong, with lives below.
-   Measure Up: the thing you know the height of, then on the reveal every player's
-   guess as a bar beside the real height, with points and a star for the closest.
+   Measure Up: the thing you know the height of as a silhouette, then on the reveal
+   the real thing grows beside it and a dashed line marks every player's guess, with
+   points and a star for the closest.
    The TV also moves the game along (reveal, next round) so nobody has to. */
 (() => {
   'use strict';
@@ -133,29 +134,51 @@
     ],
     lobbyNote: () => 'Everyone sees how tall one thing is and guesses the height of the next on their phone. The TV reveals every guess next to the real height. Closest guesses score the most.',
     mount(el, ctx) {
-      return frame(el, ctx, 'measure', `<p class="tvmu-q"></p><div class="tvmu-stage"></div>`, (q, s, n) => {
+      // The stage: while everyone guesses, the reference and a "?" box; on the reveal
+      // the real thing grows up beside it and a dashed line marks each guess.
+      let stage = null, ro = null, last = null, growFor = '', growT0 = 0, raf = 0;
+      const draw = () => {
+        cancelAnimationFrame(raf); raf = 0;
+        if (!stage || !last) return;
+        if (!stage.width()) stage.size();
+        if (!stage.width() || !stage.height()) return;
+        const U = VMU(), { s, n } = last, p = U.drawable(G.measure.current(s)), fh = U.fmtHeight;
+        if ((s.phase === 'reveal' || s.winner != null) && s.results) {
+          const gk = `${s.seed}:${s.round}`;
+          if (growFor !== gk) { growFor = gk; growT0 = performance.now(); }
+          const t = Math.min(1, (performance.now() - growT0) / 1200);
+          stage.draw(U.revealScene(stage, {
+            p, results: s.results, players: s.players, mine: -1, grow: U.ease(t),
+            label: (i, r) => `${n[i] || 'Player'} ${fh(r.guess)} +${r.pts}${r.closest ? ' ★' : ''}`,
+          }));
+          if (t < 1) raf = requestAnimationFrame(draw);
+        } else {
+          const k = U.fitK(stage, [{ v: p.ref.v, e: p.ref.e }], [p.ref.v], 0.5);
+          stage.draw({ k, items: [
+            { id: 'ref', emoji: p.ref.e, color: U.REF, v: p.ref.v, x: 0.28, top: fh(p.ref.v) },
+            { id: 'tgt', mystery: true, color: U.TGT, v: (stage.ground() * 0.6) / k, x: 0.72 },
+          ] });
+        }
+      };
+      const fr = frame(el, ctx, 'measure', `<p class="tvmu-q"></p><div class="tvmu-stage"><canvas role="img" aria-label="The two things to scale"></canvas></div>`, (q, s, n) => {
         const M = G.measure, p = M.current(s), reveal = (s.phase === 'reveal' || s.winner != null) && s.results, fh = VMU().fmtHeight;
-        q('.tvmu-q').innerHTML = `${esc(p.ref.e)} ${esc(p.ref.t)} is <b>${esc(fh(p.ref.v))}</b>. How tall is ${esc(p.tgt.e)} <b>${esc(p.tgt.t)}</b>?`;
-        const cols = [{ cls: 'ref', label: p.ref.t, emoji: p.ref.e, v: p.ref.v, val: fh(p.ref.v) }];
-        if (reveal) {
-          cols.push({ cls: 'real', label: 'Real height', emoji: p.tgt.e, v: s.results.real, val: fh(s.results.real) });
-          s.players.forEach((pl, i) => {
-            const r = s.results.guesses[i];
-            if (r && r.guess != null) cols.push({ cls: `guess${r.closest ? ' best' : ''}`, color: VML().COLORS[i % 8], label: n[i], v: r.guess, val: fh(r.guess), pts: r.pts, closest: r.closest });
-          });
-        } else cols.push({ cls: 'mystery', label: p.tgt.t, emoji: p.tgt.e, v: p.ref.v, val: '?' });
-        const top = Math.max(...cols.map(c => c.v));
-        q('.tvmu-stage').innerHTML = cols.map(c => `<div class="mu-col ${c.cls}" ${c.color ? `style="--c:${c.color}"` : ''}>
-            <span class="mu-v">${esc(c.val)}${c.pts != null ? `<em>+${c.pts}${c.closest ? ' ★' : ''}</em>` : ''}</span>
-            <span class="mu-bar" style="height:${Math.max(1.5, (100 * c.v) / top)}%">${c.emoji ? `<i>${esc(c.emoji)}</i>` : ''}</span>
-            <small>${esc(c.label)}</small></div>`).join('');
-        q('.tvmu-stage').dataset.n = cols.length;
+        q('.tvmu-q').innerHTML = `${esc(p.ref.e)} <b class="ref">${esc(p.ref.t)}</b> is <b>${esc(fh(p.ref.v))}</b>. How tall is ${esc(p.tgt.e)} <b class="tgt">${esc(p.tgt.t)}</b>?${reveal ? ` <span class="tvmu-real">It’s ${esc(fh(s.results.real))}</span>` : ''}`;
+        last = { s, n };
+        draw();
         q('.tvq-players').innerHTML = s.players.map((pl, i) => {
           const r = reveal ? s.results.guesses[i] : null;
           const tag = r ? (r.guess == null ? 'No guess' : `+${r.pts}${r.closest ? ' ★' : ''}`) : String(i) in s.answers ? 'Locked in' : s.started ? 'Thinking…' : '';
           return chip(i, n, `<em class="pts">${pl.score}</em><small>${esc(tag)}</small>`, `${r && r.closest ? ' ok' : ''}${!r && String(i) in s.answers ? ' locked' : ''}`);
         }).join('');
       });
+      const canvas = el.querySelector('.tvmu-stage canvas');
+      stage = window.MeasureStage.create(canvas);
+      ro = new ResizeObserver(() => { stage.size(); draw(); });
+      ro.observe(canvas);
+      return {
+        update: r => fr.update(r),
+        destroy() { fr.destroy(); cancelAnimationFrame(raf); ro.disconnect(); },
+      };
     },
   });
 })();

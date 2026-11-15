@@ -1007,24 +1007,18 @@ html { overflow: hidden; }
 /* measure up */
 .mu-q { margin: 0; text-align: center; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
 .mu-q b { color: var(--ink); }
-.mu-stage {
-  height: 260px; display: flex; align-items: flex-end; justify-content: center; gap: 10px; padding: 26px 8px 0; border-radius: 16px;
-  background: linear-gradient(var(--surface), var(--surface)) padding-box; box-shadow: var(--shadow); border-bottom: 3px solid var(--ink-2);
+.mu-q b.ref, .tvmu-q b.ref { color: #6F9BFF; }
+.mu-q b.tgt, .tvmu-q b.tgt { color: #FF7A68; }
+.mu-stage { position: relative; height: clamp(230px, 40vh, 360px); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.mu-canvas, .tvmu-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.mu-canvas.drag { touch-action: none; cursor: ns-resize; }
+.mu-zoom { position: absolute; top: 8px; left: 8px; display: flex; flex-direction: column; gap: 6px; }
+.mu-zoom button {
+  width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; padding: 0; border: 0; cursor: pointer;
+  background: rgba(7, 12, 22, 0.55); color: var(--ink); backdrop-filter: blur(4px);
 }
-.mu-col { height: 100%; flex: 0 1 90px; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
-.mu-stage[data-n="5"] .mu-col, .mu-stage[data-n="6"] .mu-col { flex-basis: 60px; }
-.mu-stage[data-n="7"] .mu-col, .mu-stage[data-n="8"] .mu-col, .mu-stage[data-n="9"] .mu-col, .mu-stage[data-n="10"] .mu-col { flex-basis: 44px; }
-.mu-v { font: 700 13px/1.15 var(--font-display); text-align: center; white-space: nowrap; }
-.mu-v em { display: block; font-style: normal; font-size: 11px; color: var(--hit); }
-.mu-bar { width: 100%; max-width: 64px; border-radius: 8px 8px 0 0; display: grid; place-items: start center; position: relative; transition: height 0.35s ease; }
-.mu-bar i { font-style: normal; font-size: 22px; line-height: 1; margin-top: 4px; }
-.mu-col small { width: 100%; text-align: center; font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-bottom: 6px; }
-.mu-col.ref .mu-bar { background: #8C9CB8; }
-.mu-col.real .mu-bar { background: var(--hit); }
-.mu-col.real .mu-v { color: var(--hit); }
-.mu-col.guess .mu-bar { background: var(--c, var(--blue)); opacity: 0.85; }
-.mu-col.guess.best .mu-bar { box-shadow: 0 0 0 3px #FFD25A; opacity: 1; }
-.mu-col.mystery .mu-bar { background: repeating-linear-gradient(45deg, var(--surface-2) 0 8px, transparent 8px 16px); border: 2px dashed var(--ink-2); }
+.mu-zoom button:active { transform: scale(0.94); }
+.mu-zoom svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .mu-input { display: flex; flex-direction: column; gap: 10px; }
 .mu-slider { width: 100%; accent-color: var(--blue); height: 32px; }
 .mu-fine { display: flex; align-items: center; justify-content: center; gap: 14px; }
@@ -1072,14 +1066,6 @@ html { overflow: hidden; }
 .tvml-vs { font: 800 3vh/1 var(--font-display); color: var(--ink-2); text-transform: uppercase; }
 .tvmu-q { margin: 0; text-align: center; font-size: 1.6em; color: var(--ink-2); }
 .tvmu-q b { color: var(--ink); }
-.tvmu-stage {
-  min-height: 0; display: flex; align-items: flex-end; justify-content: center; gap: 1.6vw; padding: 5vh 2vw 0; border-radius: 2vh;
-  background: var(--surface); border-bottom: 0.5vh solid var(--ink-2);
-}
-.tvmu-stage .mu-col { flex: 0 1 9vw; }
-.tvmu-stage .mu-bar { max-width: 8vw; }
-.tvmu-stage .mu-v { font-size: 1.3em; }
-.tvmu-stage .mu-v em { font-size: 0.8em; }
-.tvmu-stage .mu-bar i { font-size: 3.2vh; }
-.tvmu-stage .mu-col small { font-size: 1em; }
+.tvmu-stage { position: relative; min-height: 0; border-radius: 2vh; background: var(--surface); overflow: hidden; }
+.tvmu-real { display: inline-block; margin-left: 0.4em; padding: 0.05em 0.5em; border-radius: 0.5em; background: #FF5A47; color: #fff; font-weight: 800; }
 @media (max-aspect-ratio: 1/1) { .tvml { grid-template-columns: 1fr; } .tvml-vs { display: none; } }
