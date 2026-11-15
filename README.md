@@ -25,9 +25,13 @@ both in the app, and take-your-turn when you're not.
   a life back. Two ways to play: Pass the fuse, or Last Word (everyone types at once and the last one in
   loses a life). Play bots (three skill levels), practice alone, challenge your partner, or open a
   party room for up to 8 phones.
-- **TV mode** (Short Fuse, Four in a Row and Crazy Eights): open Blueline in a TV's web browser, or on a laptop plugged into the
-  TV, and tap TV mode. The screen shows a room code and QR code, everyone joins on their phones, and the
-  letters, lives and live typing play out on the big screen.
+- **TV mode** (every game): open Blueline in a TV's web browser, or on a laptop plugged into the TV, and
+  tap TV mode in any game's menu. The screen shows a room code and QR code, everyone joins on their
+  phones, and the game plays out on the big screen: Short Fuse letters and lives, the Four in a Row board,
+  the Crazy Eights table, the chess board with both clocks, every Word Duel board (colors only), and every
+  Sudoku racer's progress.
+- **Rooms**: every game can also be played with anyone who has the room code, no linking needed.
+  Word Duel and Sudoku rooms are races for up to 8.
 
 Board and card games also play on one phone (pass and play). Word Duel has solo practice.
 

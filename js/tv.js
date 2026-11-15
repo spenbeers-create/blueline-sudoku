@@ -132,7 +132,7 @@
         patch: fields => O.patchRoom(tv.code, fields),
         finish: winner => window.BLRooms.finish(tv.code, winner),
         rematch: () => window.BLRooms.rematch(tv.code),
-        playAgain: () => O.patchRoom(tv.code, { status: 'lobby', state: null, draft: null }).catch(() => BL.toast('Couldn’t reach the room.')),
+        playAgain: () => window.BLRooms.toLobby(tv.code),
         exit: () => askExit(false),
       });
     }

@@ -16,6 +16,23 @@
   const myName = () => (BL.settings.name || '').trim() || 'A friend';
   const prefs = () => Object.assign({ len: 5, hard: false, contrast: false }, BL.store.get('wordsPrefs', {}));
   const savePrefs = p => BL.store.set('wordsPrefs', p);
+
+  // Rooms: everyone races on the same word at once, on phones or with the TV.
+  window.BLRooms.register('words', {
+    title: 'Word Duel', maxPlayers: 8,
+    minPlayers: r => (r.screen ? 1 : 2),
+    describe: st => `${st.len || 5}-letter word${st.hard ? ', hard mode' : ''} · first to solve wins`,
+    async prepare(r) {
+      await W.load();
+      const st = r.settings || {};
+      return W.create({ seed: Math.random().toString(36).slice(2), len: st.len || 5, hard: !!st.hard, mode: 'live' });
+    },
+    start(r, entries, state) {
+      r.seats = entries.map(([uid]) => uid);
+      r.state = JSON.stringify(state);
+      r.startAt = window.Online.now() + 4500;      // a shared countdown for everyone
+    },
+  });
   const blank = () => ({ daily: { played: 0, won: 0, streak: 0, best: 0, lastWin: '', lastPlayed: '', dist: {} }, practice: { played: 0, won: 0, dist: {} }, duel: { w: 0, l: 0, d: 0 }, counted: {} });
   const stats = () => { const s = Object.assign(blank(), BL.store.get('wordsStats', {})); s.daily = Object.assign(blank().daily, s.daily); s.practice = Object.assign(blank().practice, s.practice); return s; };
   const saveStats = s => BL.store.set('wordsStats', s);
@@ -252,6 +269,18 @@
         <button type="button" class="btn" id="wm-make">Make a word</button>
       </section>
 
+      <button type="button" class="tile tv-tile" id="wm-tv">
+        <span class="tile-k">TV mode</span>
+        <span class="tile-t">Race on the big screen</span>
+        <span class="tile-m">Everyone guesses the same word on their phone while the TV shows all the boards filling in (colors only, no letters). Up to 8 players.</span>
+      </button>
+
+      <section class="panel">
+        <h2>Race anyone with a code</h2>
+        <p class="pick-note">Up to 8 players race on the same word. First to solve it wins. Uses your letter count and hard mode.</p>
+        <div class="actions row"><button type="button" class="btn" id="wm-create">Make a room</button><button type="button" class="btn" id="wm-join">Join a room</button></div>
+      </section>
+
       <section class="panel" aria-labelledby="wm-s">
         <h2 id="wm-s">Your stats</h2>
         <div class="facts">
@@ -287,6 +316,9 @@
     $$('[data-gid]', el).forEach(b => { b.onclick = () => api.openOnline(b.dataset.gid); });
     on(el, '#wm-link', () => api.link());
     on(el, '#wm-make', makeWord);
+    on(el, '#wm-tv', () => api.startTv('words'));
+    on(el, '#wm-create', () => { const q = prefs(); window.BLRooms.create('words', { len: q.len, hard: q.hard }, api); });
+    on(el, '#wm-join', () => window.BLRooms.joinPrompt('', '', api));
     $('#wm-hard', el).onchange = e => { const q = prefs(); q.hard = e.target.checked; savePrefs(q); };
     $('#wm-hc', el).onchange = e => { const q = prefs(); q.contrast = e.target.checked; savePrefs(q); };
   }

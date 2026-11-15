@@ -116,6 +116,18 @@
       </button>
     </div>
 
+    <button type="button" class="tile tv-tile" id="sudoku-tv">
+      <span class="tile-k">TV mode</span>
+      <span class="tile-t">Race on the big screen</span>
+      <span class="tile-m">Up to 8 players solve the same puzzle on their phones while the TV shows everyone’s progress. Open Blueline in a TV’s web browser, or on a laptop plugged into the TV, and tap here.</span>
+    </button>
+
+    <section class="panel">
+      <h2>Race a group</h2>
+      <p class="pick-note">Up to 8 players on the same puzzle, each on their own phone. Uses the style, grid and level picked above.</p>
+      <div class="actions row"><button type="button" class="btn" id="sudoku-room-new">Make a room</button><button type="button" class="btn" id="sudoku-room-join">Join a room</button></div>
+    </section>
+
     <nav class="home-links" aria-label="More">
       <button type="button" id="open-stats">Stats</button>
       <button type="button" id="open-code">Puzzle code</button>
@@ -226,12 +238,12 @@
 <script src="js/games/fuse-prompts.js"></script>
 <script src="js/games/fuse.js"></script>
 <script src="js/views.js"></script>
+<script src="js/rooms.js"></script>
 <script src="js/games/chess-ai.js"></script>
 <script src="js/games/chess-view.js"></script>
 <script src="js/menus/chess-menu.js"></script>
 <script src="js/games/words-view.js"></script>
 <script src="js/menus/words-menu.js"></script>
-<script src="js/rooms.js"></script>
 <script src="js/games/four-ai.js"></script>
 <script src="js/games/four-view.js"></script>
 <script src="js/menus/four-menu.js"></script>
@@ -243,6 +255,10 @@
 <script src="js/games/fuse-tv.js"></script>
 <script src="js/games/four-tv.js"></script>
 <script src="js/games/eights-tv.js"></script>
+<script src="js/games/chess-tv.js"></script>
+<script src="js/games/words-tv.js"></script>
+<script src="js/sudoku-room.js"></script>
+<script src="js/games/sudoku-tv.js"></script>
 <script src="js/hub.js"></script>
 </body>
 </html>

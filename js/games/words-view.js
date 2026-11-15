@@ -170,7 +170,7 @@
         const opp = el.querySelector('.wd-opp');
         if (snap.theirs !== undefined && !setter && s.mode !== 'custom') {
           opp.hidden = false;
-          const t = snap.theirs || W.progress(), who = ctx.names[1 - snap.viewer];
+          const t = snap.theirs || W.progress(), who = snap.theirsName || ctx.names[1 - snap.viewer];
           el.querySelector('.wd-opp-name').textContent = !t.guesses.length ? `${who} hasn’t guessed yet` : t.done ? `${who}: ${t.solved ? 'solved in ' + t.guesses.length : 'missed it'}` : `${who}: ${t.guesses.length} guess${t.guesses.length === 1 ? '' : 'es'}`;
           el.querySelector('.wd-mini').innerHTML = t.marks.map((mk, r) => `<div>${mk.split('').map(x => `<i class="${CLS[x]}"></i>`).join('')}${snap.over && t.guesses[r] ? `<b>${esc(t.guesses[r])}</b>` : ''}</div>`).join('');
         } else opp.hidden = true;

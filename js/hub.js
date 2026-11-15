@@ -328,7 +328,7 @@
     startCards: cfg => startCards(cfg),
     resumeCards: () => resumeCards(),
     openRoom: (code, seat, type) => openRoom(code, seat, type),
-    openMenu: type => openMenu(type),
+    openMenu: type => (type === 'sudoku' ? BL.show('home') : openMenu(type)),
     menuId: () => menuId,
     startTv: type => { if (window.BLTV) window.BLTV.open(type || 'fuse', menuApi); },
     back: () => leave(),
@@ -536,6 +536,7 @@
   // --------------------------------------------------- short fuse: rooms
   // Everyone in a party room watches the same record; moves are transactions on its state.
   function openRoom(code, seat, type = 'fuse') {
+    if (type === 'sudoku') { window.BLSudokuRoom.open(code, seat, menuApi); return; }
     buildMatch(type, { room: code, seat, from: 'menu' });
     const m = match;
     O.roomHere(code).catch(() => {});
@@ -550,9 +551,34 @@
       m.seat = idx;                          // a rematch can swap who goes first
       m.rec = r; m.state = st; m.draft = r.draft || null;
       m.roomNames = r.seats.map(uid => ((r.players || {})[uid] || {}).name || 'Player');
+      if (m.game.kind === 'race') roomRace(m, r, idx);
       renderMatch();
     });
   }
+  // Word Duel rooms: everyone races on the same word. Your progress is kept locally
+  // while a guess is on its way; the rival shown is whoever is doing best.
+  function roomRace(m, r, idx) {
+    const g = m.game, prog = r.prog || {};
+    const mine = parse(prog[idx]) || g.progress();
+    if (m.raceGame !== r.played || (mine.guesses || []).length >= ((m.mine && m.mine.guesses) || []).length) m.mine = mine;
+    m.raceGame = r.played;
+    const others = r.seats.map((u, i) => i).filter(i => i !== idx).map(i => ({ i, p: parse(prog[i]) || g.progress() }));
+    const rank = x => (x.p.solved ? -1e9 + x.p.time : x.p.done ? 1e9 : -x.p.guesses.length);
+    others.sort((a, b) => rank(a) - rank(b));
+    m.theirs = others.length ? others[0].p : null;
+    m.theirsName = others.length ? m.roomNames[others[0].i] : '';
+    const all = r.seats.map((u, i) => (i === idx ? m.mine : parse(prog[i])));
+    const w = raceWinner(m.state, all);
+    if (r.status === 'playing' && w != null) window.BLRooms.finish(m.room, w);
+  }
+  // First to solve wins (by the shared race clock); nobody solving once all are done is a draw.
+  function raceWinner(s, progs) {
+    let best = Infinity, who = null, tie = false;
+    progs.forEach((p, i) => { if (p && p.solved) { if (p.time < best) { best = p.time; who = i; tie = false; } else if (p.time === best) tie = true; } });
+    if (who != null) return tie ? 'draw' : who;
+    return progs.length && progs.every(p => p && p.done) ? 'draw' : null;
+  }
+
   async function roomSubmit(move) {
     const m = match, g = m.game, code = m.room, seat = m.seat;
     if (!m.state || g.over(m.state)) return 'This game is over.';
@@ -794,7 +820,7 @@
     const g = m.game;
     if (m.fuseBots) return fuseApply(move, m.seat);
     if (m.cardBots) return cardApply(move, m.seat);
-    if (m.room) return roomSubmit(move);
+    if (m.room && g.kind === 'turns') return roomSubmit(move);
     if (g.kind === 'turns') {
       if (m.rec && m.rec.status === 'over') return 'This game is over.';
       const actor = m.local ? g.turn(m.state) : m.seat;
@@ -833,6 +859,14 @@
     }
     // races
     if (m.rec && m.rec.status === 'over') return 'This one’s already decided.';
+    if (m.room) {
+      const err = g.check(m.state, m.mine, move);
+      if (err) return err;
+      m.mine = Object.assign(g.advance(m.state, m.mine, Object.assign({}, move, { time: move.time != null ? move.time : 0 })), { started: m.mine.started || Date.now() });
+      renderMatch();
+      O.roomProg(m.room, m.seat, JSON.stringify(m.mine)).catch(() => BL.toast('Couldn’t save that guess. Check your connection.'));
+      return '';
+    }
     const err = g.check(m.state, m.mine, move);
     if (err) return err;
     const started = m.mine.started || Date.now();
@@ -864,6 +898,7 @@
     else if (match.bot) sub = g.over(s) ? 'Game over' : match.thinking ? 'The bot is thinking…' : g.turn(s) === match.seat ? 'Your move' : 'Bot’s move';
     else if (match.cardBots) { const b = s.players.length - 1; sub = `${b} bot${b === 1 ? '' : 's'} · ${g.over(s) ? 'Game over' : g.turn(s) === match.seat ? 'Your turn' : `${n[g.turn(s)]}’s turn`}`; }
     else if (match.local) sub = g.over(s) ? 'On this phone' : `On this phone · ${n[g.turn(s)]}’s turn`;
+    else if (match.room && g.kind === 'race') sub = `Room ${match.room}${rec && rec.screen ? ' · on the TV' : ''} · first to solve wins`;
     else if (match.room) sub = `Room ${match.room}${rec && rec.screen ? ' · on the TV' : ''} · ${g.over(s) ? 'Game over' : g.turn(s) === match.seat ? 'Your turn' : `${n[g.turn(s)]}’s turn`}`;
     else {
       const p = partnerOnline();
@@ -880,7 +915,7 @@
     $('#p-sub').classList.toggle('live', !match.local && !match.solo && !!(partnerOnline() && partnerOnline().game === match.gid));
 
     const seats = [0, 1];
-    if (match.solo || ['chess', 'fuse', 'four', 'eights'].includes(match.type) || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
+    if (match.solo || match.room || ['chess', 'fuse', 'four', 'eights'].includes(match.type) || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
     const label = i => {
       if (match.type === 'chess') return i === 0 ? 'White' : 'Black';
       if (match.type === 'eights') return `${s.hands[i].length} card${s.hands[i].length === 1 ? '' : 's'}`;
@@ -904,7 +939,7 @@
       snap = { state: s, viewer, canAct: !over && can, draft: match.draft };
     } else {
       const over = match.solo ? g.done(match.mine) : !!(match.rec && match.rec.status === 'over');
-      snap = { state: s, viewer: match.seat, mine: match.mine, theirs: match.solo ? undefined : match.theirs, over, startAt: match.rec && match.rec.startAt };
+      snap = { state: s, viewer: match.seat, mine: match.mine, theirs: match.solo ? undefined : match.theirs, theirsName: match.theirsName, over, startAt: match.rec && match.rec.startAt };
     }
     match.inst.render(snap);
     renderPlayHead();
@@ -915,6 +950,26 @@
     const m = match, g = m.game, box = $('#p-result');
     if (m.type === 'fuse' && window.BLMenus.fuse && window.BLMenus.fuse.renderResult(box, m)) return;
     if (m.cardBots && window.BLMenus.eights && window.BLMenus.eights.renderResult(box, m, menuApi)) return;
+    if (m.room && g.kind === 'race') {
+      const r = m.rec || {}, n = names();
+      if (r.status !== 'over') {
+        if (!g.done(m.mine)) { box.hidden = true; return; }
+        box.hidden = false;
+        box.className = 'p-result wait';
+        box.innerHTML = `<p><b>${m.mine.solved ? `You got it in ${m.mine.guesses.length}.` : 'You’re out of guesses.'}</b> Waiting for the others to finish.</p>`;
+        return;
+      }
+      const w = r.winner;
+      const title = w === 'draw' ? 'Nobody got it first' : w === m.seat ? 'You win!' : `${n[w]} wins`;
+      const me = m.mine.solved ? `You solved it in ${m.mine.guesses.length}.` : m.mine.done ? 'You ran out of guesses.' : 'Someone beat you to it.';
+      box.hidden = false;
+      box.className = 'p-result';
+      box.innerHTML = `<div><b>${esc(title)}</b><p>The word was ${esc(m.state.word.toUpperCase())}. ${esc(me)}</p></div>
+        <div class="actions row"><button type="button" class="btn primary" data-a="again">Next word</button><button type="button" class="btn" data-a="menu">Menu</button></div>`;
+      on(box, '[data-a=again]', () => window.BLRooms.rematch(m.room));
+      on(box, '[data-a=menu]', () => { const c = m.room; leave(); window.BLRooms.leave(c, false); });
+      return;
+    }
     if (m.room) {
       if (!g.over(m.state)) { box.hidden = true; return; }
       const n = names(), w = g.winner(m.state), r = m.rec || {};
@@ -1079,7 +1134,7 @@
     else O.here(partner.pid, match && match.gid ? match.gid : '').catch(() => {});
   });
 
-  window.BLHub = { render: renderHub, openGame: openGameSheet, openOnline, partner: () => partner };
+  window.BLHub = { render: renderHub, openGame: openGameSheet, openOnline, partner: () => partner, api: menuApi };
   BL.boot();
   connect();
   function handleLinkHash() {

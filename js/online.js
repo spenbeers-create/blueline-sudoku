@@ -230,6 +230,9 @@
     });
     return res.committed ? res.snapshot.val() : null;
   }
+  async function getRoom(c) { await ready(); return (await ref(`rooms/${c}`).get()).val(); }
+  // Each player's progress in a race lives under its own key, so players never collide.
+  async function roomProg(c, seat, value) { await ready(); await ref(`rooms/${c}/prog/${seat}`).set(value); }
   async function patchRoom(c, fields) { await ready(); await ref(`rooms/${c}`).update(Object.assign({ updated: TS() }, fields)); }
   async function roomDraft(c, value) { await ready(); await ref(`rooms/${c}/draft`).set(value); }
   async function roomHere(c, on) {
@@ -253,7 +256,7 @@
   window.Online = {
     configured, ready, partners, invite, accept, setName, unlink,
     here, watchHere, createGame, watchGames, watchGame, update, setProgress, patch, removeGame, draft,
-    createRoom, joinRoom, watchRoom, updateRoom, roomMove, patchRoom, roomDraft, roomHere, leaveRoom,
+    createRoom, joinRoom, watchRoom, getRoom, updateRoom, roomMove, roomProg, patchRoom, roomDraft, roomHere, leaveRoom,
     me: () => uid, now, code,
   };
 })();

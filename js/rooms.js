@@ -2,9 +2,10 @@
    game that supports rooms. A game registers how to describe its settings and how
    to deal a new game:
      BLRooms.register(type, { title, describe(settings), minPlayers(room), maxPlayers,
-                              start(room, entries) -> sets room.seats and room.state })
+                              prepare?(room) -> Promise (slow work before dealing, like building a puzzle),
+                              start(room, entries, prepared) -> sets room.seats and room.state })
    rooms/{code}: { game, host, screen?, max, status: lobby|playing|over, settings,
-                   players/{uid}: {name, at}, here/{uid}, seats[], state, draft, score/{uid}, played } */
+                   players/{uid}: {name, at}, here/{uid}, seats[], state, draft, prog/{seat}, score/{uid}, played } */
 (() => {
   'use strict';
   const BL = window.BL, O = window.Online, esc = BL.esc;
@@ -117,26 +118,40 @@
 
   // Deal a new game. Anyone in the room (or the TV) can start, and a finished game
   // can be dealt again with the same players.
+  let starting = false;
   async function start(code, again) {
+    if (starting) return;
+    starting = true;
     try {
+      const now = await O.getRoom(code);
+      if (!now || !(now.status === 'lobby' || (again && now.status === 'over'))) return;
+      const d = def(now.game);
+      let prepared;
+      if (d.prepare) {
+        BL.toast('Getting the game ready…');
+        try { prepared = await d.prepare(now); } catch (e) { BL.toast('That didn’t load. Check your connection and try again.'); return; }
+      }
       await O.updateRoom(code, r => {
         if (!(r.status === 'lobby' || (again && r.status === 'over'))) return undefined;
-        const d = def(r.game);
         const entries = Object.entries(r.players || {}).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
         if (entries.length < (d.minPlayers ? d.minPlayers(r) : 2)) return undefined;
-        d.start(r, entries);
+        r.prog = null;
+        r.winner = null;
+        d.start(r, entries, prepared);
         r.status = 'playing';
         r.draft = null;
         r.played = (r.played || 0) + 1;
         return r;
       });
     } catch (e) { BL.toast(err(e)); }
+    finally { starting = false; }
   }
   // Mark the game finished once, and add a point to the winner's tally.
   function finish(code, winner) {
     return O.updateRoom(code, r => {
       if (r.status !== 'playing') return undefined;
       r.status = 'over';
+      r.winner = winner == null ? null : winner;
       if (typeof winner === 'number' && r.seats && r.seats[winner]) {
         r.score = r.score || {};
         r.score[r.seats[winner]] = (r.score[r.seats[winner]] || 0) + 1;
@@ -144,7 +159,7 @@
       return r;
     }).catch(() => null);
   }
-  const toLobby = code => O.patchRoom(code, { status: 'lobby', state: null, draft: null }).catch(() => BL.toast('Couldn’t reach the room.'));
+  const toLobby = code => O.patchRoom(code, { status: 'lobby', state: null, draft: null, prog: null }).catch(() => BL.toast('Couldn’t reach the room.'));
 
   window.BLRooms = {
     register(type, d) { DEFS[type] = d; },

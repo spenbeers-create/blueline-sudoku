@@ -17,7 +17,7 @@
   };
   const STRIKES = 3;
   const DAILY_LEVEL = ['extreme', 'easy', 'medium', 'hard', 'hard', 'expert', 'expert']; // Sunday first
-  const VERSION = '1.6.0';
+  const VERSION = '1.7.0';
 
   // ------------------------------------------------------------- storage
   const store = {
@@ -1413,10 +1413,15 @@
     } catch (e) { return null; }
   }
 
-  function beginRace(puzzle) {
+  function raceSend(msg) {
+    if (G && G.race && G.race.room) { G.race.room.send(msg); return true; }
+    return Race.send(msg);
+  }
+  // room: { send(msg), again(), leave(), oppName, delay } for races in a room.
+  function beginRace(puzzle, room) {
     closeSheet();
     const race = {
-      role: R.role, oppName: R.oppName || 'Opponent', startAt: 0, endAt: 0,
+      role: room ? 'room' : R.role, oppName: room ? room.oppName || 'Everyone else' : R.oppName || 'Opponent', startAt: 0, endAt: 0, room: room || null,
       total: puzzle.givens.filter(v => !v).length,
       opp: { filled: 0, mistakes: 0, status: 'racing', time: 0 },
       me: 'racing', myTime: 0, result: null, gone: false, note: '',
@@ -1446,11 +1451,15 @@
       n--;
       setTimeout(tick, 850);
     };
-    tick();
+    if (room && room.delay > 0) {
+      el.hidden = false;
+      el.textContent = '';
+      setTimeout(tick, room.delay);
+    } else tick();
   }
 
   function sendProgress() {
-    if (G && G.race && !G.race.gone) Race.send({ t: 'progress', filled: myFilled(), mistakes: G.mistakes });
+    if (G && G.race && !G.race.gone) raceSend({ t: 'progress', filled: myFilled(), mistakes: G.mistakes });
   }
 
   function updateRaceBar() {
@@ -1474,12 +1483,12 @@
   function raceSolved(time) {
     const r = G.race;
     r.me = 'done'; r.myTime = time;
-    Race.send({ t: 'done', time });
+    raceSend({ t: 'done', time });
     resolveRace();
   }
   function raceOut() {
     G.race.me = 'out';
-    Race.send({ t: 'out' });
+    raceSend({ t: 'out' });
     resolveRace();
   }
 
@@ -1521,7 +1530,7 @@
       lede = r.me === 'out' ? 'You both ran out of mistakes.' : 'You finished in the same time.';
     }
     const canKeep = G.status === 'playing' || G.status === 'lost';
-    const host = r.role === 'host', connected = !r.gone && Race.isOpen();
+    const host = r.role === 'host', connected = !r.room && !r.gone && Race.isOpen();
     openSheet(`
       <h2 id="sheet-title">${title}</h2>
       <p class="lede">${lede}</p>
@@ -1531,6 +1540,7 @@
         <div class="fact"><span>Record</span><b>${raceRecord.wins}–${raceRecord.losses}${raceRecord.draws ? '–' + raceRecord.draws : ''}</b></div>
       </div>
       <div class="actions">
+        ${r.room ? '<button type="button" class="btn primary big" data-a="again">Next puzzle</button>' : ''}
         ${host && connected ? '<button type="button" class="btn primary big" data-a="rematch">Rematch</button>' : ''}
         ${!host && connected ? `<div class="status-line"><span class="spinner"></span>${opp} can start a rematch.</div>` : ''}
         ${canKeep ? '<button type="button" class="btn" data-a="keep">Keep solving for practice</button>' : ''}
@@ -1546,6 +1556,7 @@
           if (!p || !Race.send({ t: 'start', puzzle: p })) { btn.disabled = false; btn.textContent = 'Rematch'; toast('Rematch didn’t start. Try again.'); return; }
           beginRace(p);
         });
+        on(b, '[data-a=again]', () => { closeSheet(); if (r.room) r.room.again(); });
         on(b, '[data-a=keep]', () => {
           closeSheet();
           G.status = 'practice';
@@ -1581,9 +1592,9 @@
   }
 
   function leaveRace(home) {
-    Race.send({ t: 'bye' });
-    setTimeout(() => Race.close(), 200);
-    R = null;
+    const room = G && G.race && G.race.room;
+    if (room) { room.send({ t: 'bye' }); if (room.leave) room.leave(); }
+    else { Race.send({ t: 'bye' }); setTimeout(() => Race.close(), 200); R = null; }
     closeSheet();
     if (G && G.race) {
       if (!G.race.endAt) G.race.endAt = Date.now();
@@ -1658,6 +1669,24 @@
 
   // Debug and test hook (no game data leaves the device).
   window.__blueline = { get game() { return G; }, engine: E, newGame, paint };
+  const roomRace = {
+    begin(puzzle, room) { const p = sanitizePuzzle(puzzle); if (!p) return false; beginRace(p, room); return true; },
+    // opp: { status: racing|done|out|left, filled, mistakes, time }, name: who that is
+    rival(opp, name) {
+      if (!G || !G.race || !G.race.room) return;
+      const r = G.race;
+      r.oppName = name || r.oppName;
+      Object.assign(r.opp, opp);
+      updateRaceBar();
+      if (r.opp.status !== 'racing') resolveRace();
+    },
+    active: () => !!(G && G.race && G.race.room),
+    current: () => (G && G.race && G.race.room) || null,
+    end: home => { if (G && G.race && G.race.room) leaveRace(home); },
+    filled: () => (G ? myFilled() : 0),
+    mistakes: () => (G ? G.mistakes || 0 : 0),
+    cells: () => (G ? G.vals.map((v, c) => (G.puzzle.givens[c] ? 2 : v && v === G.puzzle.solution[c] ? 1 : 0)).join('') : ''),
+  };
 
   function boot() {
     applyTheme();
@@ -1675,7 +1704,7 @@
   $('#home-back').onclick = () => toHub();
   window.BL = {
     openSheet, closeSheet, sheetOpen, toast, shareText, copyText, esc, fmt, settings, saveSettings, store,
-    show, toHub, openSettings, buzz, boot,
+    show, toHub, openSettings, buzz, boot, generate, roomRace, pick: () => Object.assign({}, pick), LEVEL_NAMES, VARIANTS, SIZES,
     popQuiet: () => { ignorePop = true; history.back(); },
   };
 })();

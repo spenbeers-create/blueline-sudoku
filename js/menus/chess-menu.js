@@ -23,6 +23,20 @@
   const rec = (o) => (o ? `${o.w || 0}–${o.l || 0}${o.d ? '–' + o.d : ''}` : '0–0');
   const colorName = c => ({ w: 'White', b: 'Black', r: 'Random' })[c];
 
+  // Rooms: two phones (and a TV). Colors swap every game.
+  const C = window.BLGames.chess;
+  window.BLRooms.register('chess', {
+    title: 'Chess', maxPlayers: 2,
+    minPlayers: () => 2,
+    describe: st => { const c = CLOCKS.find(x => x.id === st.tc); return c ? `${c.label} ${c.sub.toLowerCase()} clock` : 'No clock'; },
+    start(r, entries) {
+      const order = (r.played || 0) % 2 ? entries.slice().reverse() : entries;
+      const c = CLOCKS.find(x => x.id === (r.settings || {}).tc);
+      r.seats = order.map(([uid]) => uid);
+      r.state = JSON.stringify(C.create({ clock: c ? { minutes: c.minutes, increment: c.increment } : null }));
+    },
+  });
+
   function seg(id, opts, val) {
     return `<div class="seg" role="radiogroup" id="${id}">${opts.map(([v, t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${String(v) === String(val)}">${t}</button>`).join('')}</div>`;
   }
@@ -86,6 +100,7 @@
   MENUS.chess = {
     title: 'Chess',
     look: openLook,
+    CLOCKS,
     render(el, api) {
       const p = prefs(), st = stats(), partner = api.partner();
       const pn = partner ? esc(partner.name) : '';
@@ -137,6 +152,18 @@
           <button type="button" class="tile" id="cm-local"><span class="tile-k">One phone</span><span class="tile-t">Pass and play</span><span class="tile-m">Take turns on this phone</span></button>
           <button type="button" class="tile" id="cm-look"><span class="tile-k">Style</span><span class="tile-t">Board and pieces</span><span class="tile-m" id="cm-look-m"></span></button>
         </div>
+
+        <button type="button" class="tile tv-tile" id="cm-tv">
+          <span class="tile-k">TV mode</span>
+          <span class="tile-t">Play on the big screen</span>
+          <span class="tile-m">The board goes on the TV with both clocks, and you each move from your phone. Open Blueline in a TV’s web browser, or on a laptop plugged into the TV, and tap here.</span>
+        </button>
+
+        <section class="panel">
+          <h2>Play anyone with a code</h2>
+          <p class="pick-note">For friends you haven’t linked with. Make a room and send the code, or join theirs. Uses the clock you picked above.</p>
+          <div class="actions row"><button type="button" class="btn" id="cm-create">Make a room</button><button type="button" class="btn" id="cm-join">Join a room</button></div>
+        </section>
 
         <section class="panel stats-panel" aria-labelledby="cm-stats">
           <h2 id="cm-stats">Your record</h2>
@@ -204,6 +231,9 @@
         else api.startLocal('chess');
       });
       on(el, '#cm-look', () => openLook(() => MENUS.chess.render(el, api)));
+      on(el, '#cm-tv', () => api.startTv('chess'));
+      on(el, '#cm-create', () => { const q = prefs(); window.BLRooms.create('chess', { tc: q.mode === 'live' ? q.tc : '' }, api); });
+      on(el, '#cm-join', () => window.BLRooms.joinPrompt('', '', api));
       $$('[data-gid]', el).forEach(b => { b.onclick = () => api.openOnline(b.dataset.gid); });
       on(el, '[data-cont=bot]', () => api.resumeBot());
       on(el, '[data-cont=local]', () => api.resumeLocal('chess'));
