@@ -13,6 +13,9 @@ both in the app, and take-your-turn when you're not.
 - **Four in a Row**: drop discs and line up four. Four bot levels (Easy to Expert) with Undo and Hint, three
   board sizes, live or take-turns games with your partner, rooms for anyone with a code, warnings where
   someone can win next, and your own disc colors, board and disc style.
+- **Checkers**: 8×8, must-jump and multi-jumps, kings, and an optional flying-kings rule. Four bot levels
+  (Easy to Expert) with Undo and Hint, live or take-turns games with your partner, rooms, pass and play,
+  and your own piece colors and board.
 - **Crazy Eights**: match the suit or number, eights are wild, first to empty their hand wins. 2 to 6 players:
   1 to 5 bots (Easy, Normal, Hard), party rooms, your partner, or pass and play. House rules: twos make the
   next player draw (and stack), queens skip, aces reverse, draw one or draw till you can, hand size. Table
@@ -28,7 +31,7 @@ both in the app, and take-your-turn when you're not.
 - **TV mode** (every game): open Blueline in a TV's web browser, or on a laptop plugged into the TV, and
   tap TV mode in any game's menu. The screen shows a room code and QR code, everyone joins on their
   phones, and the game plays out on the big screen: Short Fuse letters and lives, the Four in a Row board,
-  the Crazy Eights table, the chess board with both clocks, every Word Duel board (colors only), and every
+  the Crazy Eights table, the chess and checkers boards, every Word Duel board (colors only), and every
   Sudoku racer's progress.
 - **Rooms**: every game can also be played with anyone who has the room code, no linking needed.
   Word Duel and Sudoku rooms are races for up to 8.
@@ -64,6 +67,7 @@ node tools/test-words.js         # Word Duel
 node tools/test-fuse.js          # Short Fuse
 node tools/test-four.js          # Four in a Row sizes and bot levels
 node tools/test-eights.js        # Crazy Eights house rules, 2-6 players, bots
+node tools/test-checkers.js      # Checkers rules and bot levels
 ```
 
 Word lists come from SCOWL via the `wordlist-english` package; the scripts in `tools/`

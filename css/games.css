@@ -874,3 +874,56 @@ html { overflow: hidden; }
   .tvs-card { width: 42vw; }
   .tvw-row i { width: 3.4vh; height: 3.4vh; }
 }
+
+/* --------------------------------------------------------------- checkers
+   Piece and board colors come from the Style sheet: --ck0/--ck1 per seat, --ck-lt/--ck-dk. */
+.gi-checkers { --m: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cellipse cx='12' cy='16' rx='9' ry='4.2' fill-opacity='.55'/%3E%3Cellipse cx='12' cy='10' rx='9' ry='4.2'/%3E%3Cellipse cx='12' cy='9.2' rx='5.5' ry='2.4' fill='none' stroke='black' stroke-opacity='.35' stroke-width='1.2'/%3E%3C/svg%3E"); }
+.ck { --ck0: #C8312A; --ck1: #26292F; --ck-lt: #EEE6CC; --ck-dk: #4E7A4A; max-width: 480px; margin: auto; display: flex; flex-direction: column; gap: 8px; }
+.ck-bar { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); border: 2px solid transparent; transition: border-color 0.15s; }
+.ck-bar > span:first-of-type { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ck-bar b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ck-bar small { font-size: 12px; color: var(--ink-2); }
+.ck-bar.turn { border-color: var(--blue); }
+.ck-bar.turn small { color: var(--ink); font-weight: 600; }
+.ck-bar.won { border-color: var(--hit); }
+.ck-chip { flex: none; width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25), 0 0 0 1.5px rgba(140, 156, 184, 0.6); }
+.ck-chip.p0, .ck-took i.p0 { background: var(--ck0); }
+.ck-chip.p1, .ck-took i.p1 { background: var(--ck1); }
+.ck-took { display: flex; flex-wrap: wrap; justify-content: flex-end; max-width: 45%; }
+.ck-took i { width: 12px; height: 12px; border-radius: 50%; margin-left: -3px; box-shadow: 0 0 0 1.5px var(--surface); }
+.ck-board { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); touch-action: manipulation; }
+.ck-sq { aspect-ratio: 1; min-width: 0; padding: 0; border-radius: 0; position: relative; display: grid; place-items: center; }
+.ck-sq.lt { background: var(--ck-lt); }
+.ck-sq.dk { background: var(--ck-dk); }
+.ck-sq.last::before { content: ""; position: absolute; inset: 0; background: rgba(255, 210, 60, 0.28); }
+.ck-sq.sel::before { content: ""; position: absolute; inset: 0; background: rgba(111, 155, 255, 0.5); }
+.ck-sq.trail::before { content: ""; position: absolute; inset: 0; background: rgba(111, 155, 255, 0.25); }
+.ck-sq.hint::before { content: ""; position: absolute; inset: 0; background: rgba(46, 154, 90, 0.5); }
+.ck-sq.dot::after { content: ""; position: absolute; inset: 37%; border-radius: 50%; background: rgba(255, 255, 255, 0.75); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2); }
+.ck-sq.target::after { content: ""; position: absolute; inset: 6%; border-radius: 6px; border: 3px solid rgba(255, 255, 255, 0.7); }
+.ck-sq.must .ck-pc { box-shadow: 0 0 0 3px #FFD25A, inset 0 -3px 0 rgba(0, 0, 0, 0.25); }
+.ck-sq.gone::after { content: ""; position: absolute; inset: 14%; border-radius: 50%; background: rgba(255, 255, 255, 0.45); animation: ck-gone 0.6s ease-out forwards; }
+@keyframes ck-gone { to { transform: scale(0.2); opacity: 0; } }
+.ck-pc {
+  position: relative; z-index: 1; width: 80%; height: 80%; border-radius: 50%; display: grid; place-items: center;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25), inset 0 0 0 4px rgba(255, 255, 255, 0.14), 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+.ck-pc.p0 { background: var(--ck0); }
+.ck-pc.p1 { background: var(--ck1); }
+.ck-pc::after { content: ""; position: absolute; inset: 22%; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.22); }
+.ck-pc.king svg { width: 52%; height: 52%; fill: #FFD25A; stroke: rgba(0, 0, 0, 0.35); stroke-width: 1; position: relative; z-index: 1; }
+.ck-board.can .ck-sq { cursor: pointer; }
+.ck-note { margin: 0; min-height: 1.3em; text-align: center; font-size: 13px; color: var(--ink-2); font-weight: 500; }
+.ck-tools { display: flex; justify-content: center; gap: 18px; }
+.ck-tools .tool { min-width: 72px; }
+.ck-mini { max-width: 230px; }
+.ck-mini .ck-board { grid-template-columns: repeat(8, 1fr); }
+@media (prefers-reduced-motion: reduce) { .ck-sq.gone::after { animation: none; opacity: 0; } }
+/* checkers on the TV */
+.tvk-board { max-width: none; margin: 0; width: min(76vh, 54vw); }
+.tvk-board .ck-board { border-radius: 1.2vh; }
+.tvk-left { font-size: 1.1em; color: var(--ink-2); }
+/* Dark piece colors (black, walnut) need a light edge on the dark TV. */
+.tvk .tv4-side .tvf-av { box-shadow: 0 0 0 0.15em rgba(238, 242, 250, 0.45); }
+.tvk .tv4-score { color: var(--ink); }
+.tvk .tv4-side.turn { border-color: var(--blue); box-shadow: 0 0 2.4vw rgba(111, 155, 255, 0.6); }

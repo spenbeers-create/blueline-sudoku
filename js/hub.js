@@ -9,14 +9,15 @@
   const on = (root, sel, fn) => { const el = root.querySelector(sel); if (el) el.onclick = fn; };
 
   const CATALOG = [
-    { id: 'sudoku', name: 'Sudoku', cat: 'Puzzles', blurb: 'Six levels, big grids, Killer and Diagonal.', players: 'Solo or race' },
+    { id: 'sudoku', name: 'Sudoku', cat: 'Puzzles', blurb: 'Six levels, big grids, Killer and Diagonal.', players: 'Solo, race · TV mode' },
     { id: 'fuse', cat: 'Words', players: 'Up to 8 · TV mode' },
-    { id: 'words', cat: 'Words', players: '2 players' },
+    { id: 'words', cat: 'Words', players: 'Up to 8 · TV mode' },
     { id: 'four', cat: 'Board', players: '2 players · TV mode' },
-    { id: 'chess', cat: 'Board', players: '2 players' },
+    { id: 'chess', cat: 'Board', players: '2 players · TV mode' },
+    { id: 'checkers', cat: 'Board', players: '2 players · TV mode' },
     { id: 'eights', cat: 'Cards', players: 'Up to 6 · TV mode' },
   ].map(c => Object.assign({ name: GAMES[c.id] && GAMES[c.id].name, blurb: GAMES[c.id] && GAMES[c.id].blurb }, c));
-  const COMING = ['Checkers', 'Dots and Boxes', 'Sea Battle', 'Go Fish', 'Gin Rummy', 'Speed', 'Hangman', 'Word Tiles', 'Minesweeper race', '2048 race', 'Memory Match'];
+  const COMING = ['Dots and Boxes', 'Sea Battle', 'Go Fish', 'Gin Rummy', 'Speed', 'Hangman', 'Word Tiles', 'Minesweeper race', '2048 race', 'Memory Match'];
 
   let partner = BL.store.get('partner', null);   // { pid, uid, name }
   let games = {};                                 // gid -> record
@@ -96,7 +97,7 @@
         BL.toast(`${gameName(r.type)} with ${partnerName()} is finished`, { label: 'See', run: () => openOnline(gid) });
       }
     }
-    for (const [gid, r] of Object.entries(games)) if ((r.type === 'chess' || r.type === 'four' || r.type === 'eights') && r.status === 'over' && r.winner != null) recordOnline(r.type, gid, r);
+    for (const [gid, r] of Object.entries(games)) if (['chess', 'four', 'eights', 'checkers'].includes(r.type) && r.status === 'over' && r.winner != null) recordOnline(r.type, gid, r);
     for (const [gid, r] of Object.entries(games)) if (r.type === 'words' && r.status === 'over' && r.winner != null && window.BLMenus.words) window.BLMenus.words.recordDuel(gid, r, mySeat(r));
     firstLoad = false;
     renderHub();
@@ -359,7 +360,7 @@
 
   // ------------------------------------------------------------------ bots
   // Chess and Four in a Row bots think in a worker so the board stays smooth.
-  const BOT_AI = { chess: () => window.ChessAI, four: () => window.FourAI };
+  const BOT_AI = { chess: () => window.ChessAI, four: () => window.FourAI, checkers: () => window.CheckersAI };
   const workers = {}, thinkJobs = new Map();
   let thinkId = 0;
   function think(type, state, level, time) {
@@ -435,7 +436,7 @@
     st.partner[k] = (st.partner[k] || 0) + 1;
     BL.store.set(type + 'Stats', st);
   }
-  const LOCAL_SAVE = ['chess', 'four', 'eights'];
+  const LOCAL_SAVE = ['chess', 'four', 'eights', 'checkers'];
   function resumeLocal(type) {
     const saved = BL.store.get(type + 'Local', null);
     if (!saved || !saved.state) { openLocal(type, 'menu'); return; }
@@ -688,7 +689,8 @@
     const extraOpts = type === 'words' ? { len: opts.len, hard: opts.hard, mode: opts.mode || 'duel', word: opts.word, hint: opts.hint, by: opts.by, guesser: opts.mode === 'custom' ? 1 : null }
       : type === 'fuse' ? Object.assign({}, opts.settings || {}, { variant: opts.variant, players: [{ name: 'Player 1' }, { name: 'Player 2' }] })
       : type === 'four' ? { size: opts.size }
-      : type === 'eights' ? { rules: opts.rules || false } : {};
+      : type === 'eights' ? { rules: opts.rules || false }
+      : type === 'checkers' ? { rules: opts.rules } : {};
     const state = g.create(Object.assign({ seed, first: 0, clock: opts.mode === 'live' && opts.tc ? opts.tc : null }, extraOpts));
     const me = O.me();
     let seats;
@@ -830,7 +832,7 @@
       m.state = g.apply(m.state, move, actor);
       if (!move.typing && BL.buzz) BL.buzz(8);
       if (m.bot) {
-        if (move.from != null || move.col != null) m.stack.push(before);
+        if (move.from != null || move.col != null || move.path != null) m.stack.push(before);
         saveBot();
         renderMatch();
         if (g.over(m.state)) recordBot(m.type, m.bot.level, m.seat, g.winner(m.state));
@@ -915,7 +917,7 @@
     $('#p-sub').classList.toggle('live', !match.local && !match.solo && !!(partnerOnline() && partnerOnline().game === match.gid));
 
     const seats = [0, 1];
-    if (match.solo || match.room || ['chess', 'fuse', 'four', 'eights'].includes(match.type) || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
+    if (match.solo || match.room || ['chess', 'fuse', 'four', 'eights', 'checkers'].includes(match.type) || (match.type === 'words' && s.mode === 'custom')) { $('#p-players').innerHTML = ''; return; }
     const label = i => {
       if (match.type === 'chess') return i === 0 ? 'White' : 'Black';
       if (match.type === 'eights') return `${s.hands[i].length} card${s.hands[i].length === 1 ? '' : 's'}`;
@@ -1034,10 +1036,10 @@
       </div>`;
     on(box, '[data-a=again]', () => {
       if (m.type === 'words' && m.state.mode === 'custom' && window.BLMenus.words.make) { window.BLMenus.words.make(menuApi); return; }
-      if (m.bot) startBot({ type: m.type, level: m.bot.level, seat: m.type === 'four' ? 1 - m.seat : m.seat, opts: m.botOpts });
+      if (m.bot) startBot({ type: m.type, level: m.bot.level, seat: m.type === 'four' || m.type === 'checkers' ? 1 - m.seat : m.seat, opts: m.botOpts });
       else if (m.local || m.solo) {
         if (LOCAL_SAVE.includes(m.type)) BL.store.set(m.type + 'Local', null);
-        openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size, first: 1 - (m.state.first || 0) } : m.type === 'eights' ? { rules: m.state.rules || false } : undefined);
+        openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size, first: 1 - (m.state.first || 0) } : m.type === 'eights' ? { rules: m.state.rules || false } : m.type === 'checkers' ? { rules: m.state.rules, first: 1 - (m.state.first || 0) } : undefined);
       }
       else startOnline(m.type, Object.assign({ gid: m.gid }, m.rec));
     });
@@ -1110,7 +1112,7 @@
           if (m.cardBots) { startCards(m.cardCfg); return; }
           if (m.bot) { startBot({ type: m.type, level: m.bot.level, seat: m.seat, opts: m.botOpts }); return; }
           if (LOCAL_SAVE.includes(m.type)) BL.store.set(m.type + 'Local', null);
-          openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size } : m.type === 'eights' ? { rules: m.state.rules || false } : undefined);
+          openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size } : m.type === 'eights' || m.type === 'checkers' ? { rules: m.state.rules || false } : undefined);
         });
         on(b, '[data-a=leaveroom]', () => { BL.closeSheet(); const c = m.room; leave(); O.leaveRoom(c, false, false).catch(() => {}); });
         on(b, '[data-a=remove]', () => {
