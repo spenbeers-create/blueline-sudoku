@@ -137,8 +137,29 @@
       });
     }
     tv.view.update(r);
+    hurryBanner(r);
+  }
+  // Show a "hurry up" countdown on the big screen too.
+  function hurryBanner(r) {
+    let el = $('#tv-hurry');
+    if (!el) { el = document.createElement('div'); el.id = 'tv-hurry'; el.className = 'tv-hurry'; el.hidden = true; screen().appendChild(el); }
+    clearInterval(tv.hurryT);
+    const s = (() => { try { return JSON.parse(r.state); } catch (e) { return null; } })(), h = r.hurry;
+    const key = s ? `${s.turn}:${s.moves ? s.moves.length : ''}:${s.ev != null ? s.ev : s.log ? s.log.length : ''}` : '';
+    if (!s || !h || h.key !== key || h.seat !== s.turn || r.status !== 'playing') { el.hidden = true; return; }
+    const name = ((r.players || {})[(r.seats || [])[h.seat]] || {}).name || 'Player';
+    const draw = () => {
+      const left = Math.max(0, Math.ceil((h.at - O.now()) / 1000));
+      el.hidden = false;
+      el.classList.toggle('low', left <= 10);
+      el.innerHTML = `<b>${esc(name)}, hurry up!</b><span>${left}</span>`;
+      if (left <= 0) clearInterval(tv.hurryT);
+    };
+    draw();
+    tv.hurryT = setInterval(draw, 250);
   }
   function unmount() {
+    if (tv) { clearInterval(tv.hurryT); const h = $('#tv-hurry'); if (h) h.hidden = true; }
     if (tv && tv.view) { try { tv.view.destroy(); } catch (e) { /* ignore */ } tv.view = null; }
     const info = $('#tv-info');
     if (info) info.textContent = '';

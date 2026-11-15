@@ -35,6 +35,9 @@ both in the app, and take-your-turn when you're not.
   Sudoku racer's progress.
 - **Rooms**: every game can also be played with anyone who has the room code, no linking needed.
   Word Duel and Sudoku rooms are races for up to 8.
+- **Hurry up**: in Chess, Checkers, Four in a Row and Crazy Eights against your partner or in a room, tap
+  Hurry up while it's someone else's turn (and they're in the game). They get 30 seconds; then a sensible
+  move is made for them and the game moves on. The countdown shows on everyone's phone and on the TV.
 
 Board and card games also play on one phone (pass and play). Word Duel has solo practice.
 

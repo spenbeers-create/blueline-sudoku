@@ -1,6 +1,6 @@
 /* Offline support: keeps the app on the phone so it opens without internet.
    Bump VERSION on every release so phones pick up the new files. */
-const VERSION = 'blueline-1.8.0';
+const VERSION = 'blueline-1.9.0';
 const KEEP = ['blueline-runtime', 'blueline-data'];
 const SHELL = [
   './',

@@ -182,6 +182,8 @@
   async function removeGame(pid, gid) { await ready(); await ref(`pairs/${pid}/games/${gid}`).remove(); }
   // Live typing for word games. Not a move, so it leaves 'updated' alone.
   async function draft(pid, gid, value) { await ready(); await ref(`pairs/${pid}/games/${gid}/draft`).set(value); }
+  // A "hurry up" deadline for whoever's turn it is. Not a move, so 'updated' stays put.
+  async function hurry(pid, gid, value) { await ready(); await ref(`pairs/${pid}/games/${gid}/hurry`).set(value); }
 
 
   // ----------------------------------------------------------- party rooms
@@ -235,6 +237,7 @@
   async function roomProg(c, seat, value) { await ready(); await ref(`rooms/${c}/prog/${seat}`).set(value); }
   async function patchRoom(c, fields) { await ready(); await ref(`rooms/${c}`).update(Object.assign({ updated: TS() }, fields)); }
   async function roomDraft(c, value) { await ready(); await ref(`rooms/${c}/draft`).set(value); }
+  async function roomHurry(c, value) { await ready(); await ref(`rooms/${c}/hurry`).set(value); }
   async function roomHere(c, on) {
     await ready();
     const r = ref(`rooms/${c}/here/${uid}`);
@@ -255,7 +258,7 @@
 
   window.Online = {
     configured, ready, partners, invite, accept, setName, unlink,
-    here, watchHere, createGame, watchGames, watchGame, update, setProgress, patch, removeGame, draft,
+    here, watchHere, createGame, watchGames, watchGame, update, setProgress, patch, removeGame, draft, hurry, roomHurry,
     createRoom, joinRoom, watchRoom, getRoom, updateRoom, roomMove, roomProg, patchRoom, roomDraft, roomHere, leaveRoom,
     me: () => uid, now, code,
   };

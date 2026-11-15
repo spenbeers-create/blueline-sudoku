@@ -580,6 +580,103 @@
     return progs.length && progs.every(p => p && p.done) ? 'draw' : null;
   }
 
+  // ------------------------------------------------------------- hurry up
+  // When it's someone else's turn and they're in the game, you can hurry them: they
+  // get 30 seconds, then a sensible move is made for them and the game moves on.
+  const HURRY_MS = 30000;
+  const HURRY_GAMES = ['chess', 'four', 'checkers', 'eights'];
+  const turnKey = s => `${s.turn}:${s.moves ? s.moves.length : ''}:${s.ev != null ? s.ev : s.log ? s.log.length : ''}`;
+  function hurryInfo(m) {
+    if (!m || !m.state || !HURRY_GAMES.includes(m.type) || m.local || m.solo || m.bot || m.cardBots) return null;
+    if (!m.room && !m.gid) return null;
+    const g = m.game, s = m.state;
+    if (g.over(s) || (m.rec && m.rec.status === 'over')) return null;
+    const slow = g.turn(s), h = m.rec && m.rec.hurry;
+    const active = h && h.seat === slow && h.key === turnKey(s) ? h : null;
+    return { slow, mine: slow === m.seat, active };
+  }
+  function slowHere(m, seat) {
+    if (m.room) { const uid = m.rec && m.rec.seats && m.rec.seats[seat]; return !!(uid && m.rec.here && m.rec.here[uid]); }
+    const p = partnerOnline();
+    return !!(p && p.game === m.gid);
+  }
+  async function hurryUp() {
+    const m = match, hi = hurryInfo(m);
+    if (!hi || hi.mine || hi.active) return;
+    const h = { seat: hi.slow, key: turnKey(m.state), at: O.now() + HURRY_MS, by: O.me() };
+    try {
+      if (m.room) await O.roomHurry(m.room, h);
+      else await O.hurry(partner.pid, m.gid, h);
+      if (m.rec) m.rec.hurry = h;
+      renderHurry();
+    } catch (e) { BL.toast('Couldn’t send that. Check your connection.'); }
+  }
+  // Time's up: pick a move for the slow player (a quick, sensible one) and play it as them.
+  async function autoMove(m, seat) {
+    if (m.autoBusy) return;
+    m.autoBusy = true;
+    const g = m.game, s = m.state, key = turnKey(s);
+    let mv = null;
+    try { mv = m.type === 'eights' ? g.botMove(s, seat, 2) : await think(m.type, s, 2); } catch (e) { mv = null; }
+    if (!mv || !g.legal(s, mv, seat)) { const all = g.legalMoves(s); mv = all.length ? all[Math.floor(Math.random() * all.length)] : null; }
+    if (mv && m.type === 'chess') mv = Object.assign({}, mv, { at: O.now() });
+    if (!mv || match !== m || turnKey(m.state) !== key) { m.autoBusy = false; return; }
+    const name = names()[seat] || 'them';
+    try {
+      if (m.room) {
+        const res = await O.roomMove(m.room, cur => { const st = parse(cur); if (!st || turnKey(st) !== key || !g.legal(st, mv, seat)) return undefined; return JSON.stringify(g.apply(st, mv, seat)); });
+        const n = parse(res);
+        if (n && g.over(n)) window.BLRooms.finish(m.room, g.winner(n));
+        if (res) BL.toast(`Time’s up. A move was made for ${name}.`);
+      } else {
+        const res = await O.update(partner.pid, m.gid, rec => {
+          const st = parse(rec.state);
+          if (!st || rec.status !== 'active' || turnKey(st) !== key || !g.legal(st, mv, seat)) return undefined;
+          const n = g.apply(st, mv, seat);
+          rec.state = JSON.stringify(n); rec.turn = g.turn(n); rec.by = O.me(); rec.hurry = null;
+          if (g.over(n)) { rec.status = 'over'; rec.winner = g.winner(n); }
+          return rec;
+        });
+        if (res) BL.toast(`Time’s up. A move was made for ${name}.`);
+      }
+    } catch (e) { /* someone else got there first */ }
+    m.autoBusy = false;
+  }
+  function renderHurry() {
+    const box = $('#p-hurry'), m = match;
+    if (!box || !m || $('#play').hidden) return;
+    const hi = hurryInfo(m), n = names();
+    if (!hi) { box.hidden = true; m.hurryWas = null; return; }
+    const now = O.now();
+    if (hi.active) {
+      const left = Math.max(0, Math.ceil((hi.active.at - now) / 1000)), pct = Math.max(0, Math.min(100, (100 * (hi.active.at - now)) / HURRY_MS));
+      box.hidden = false;
+      box.className = `p-hurry on${hi.mine ? ' mine' : ''}${left <= 10 ? ' low' : ''}`;
+      box.innerHTML = `<p>${hi.mine ? `<b>Hurry up!</b> ${left}s left, or a move is made for you.` : `<b>${esc(n[hi.slow] || 'They')}</b> has ${left}s, then a move is made for them.`}</p><i style="width:${pct}%"></i>`;
+      if (hi.mine && (!m.hurryWas || m.hurryWas.key !== hi.active.key)) { m.hurryWas = hi.active; BL.buzz && BL.buzz([90, 60, 90]); }
+      return;
+    }
+    // My hurried turn ended: say so if it was the clock, not me, that ended it.
+    if (m.hurryWas && hi.slow !== m.seat && now >= m.hurryWas.at) BL.toast('Time ran out, so a move was made for you.');
+    m.hurryWas = null;
+    if (hi.mine || !slowHere(m, hi.slow)) { box.hidden = true; return; }
+    box.hidden = false;
+    box.className = 'p-hurry';
+    box.innerHTML = `<button type="button" class="btn hurry-btn" data-a="hurry"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>Hurry ${esc(n[hi.slow] || 'them')} up</button>`;
+    on(box, '[data-a=hurry]', hurryUp);
+  }
+  setInterval(() => {
+    const m = match;
+    if (!m || $('#play').hidden) return;
+    const hi = hurryInfo(m);
+    if (hi && hi.active) {
+      renderHurry();
+      const now = O.now(), a = hi.active;
+      // The person who hurried makes the move; anyone else steps in if they've gone.
+      if (now >= a.at && ((!hi.mine && (a.by === O.me() || now >= a.at + 4000)) || now >= a.at + 8000)) autoMove(m, hi.slow);
+    }
+  }, 500);
+
   async function roomSubmit(move) {
     const m = match, g = m.game, code = m.room, seat = m.seat;
     if (!m.state || g.over(m.state)) return 'This game is over.';
@@ -851,6 +948,7 @@
             rec.state = JSON.stringify(n);
             rec.turn = g.turn(n);
             rec.by = O.me();
+            rec.hurry = null;
             if (g.over(n)) { rec.status = 'over'; rec.winner = g.winner(n); }
             return rec;
           });
@@ -946,6 +1044,7 @@
     match.inst.render(snap);
     renderPlayHead();
     renderResult();
+    renderHurry();
   }
 
   function renderResult() {
