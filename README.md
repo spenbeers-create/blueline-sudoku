@@ -28,13 +28,20 @@ both in the app, and take-your-turn when you're not.
   a life back. Two ways to play: Pass the fuse, or Last Word (everyone types at once and the last one in
   loses a life). Play bots (three skill levels), practice alone, challenge your partner, or open a
   party room for up to 8 phones.
+- **More or Less**: higher or lower. You see how many people look up a topic on Wikipedia each month; did
+  the next one get more or less? Everyone answers at once with 3 lives, and whoever lasts longest wins. Alone,
+  see how many you can get right. 304 topics, numbers from the Wikimedia pageviews API (`tools/gen-moreless.py`).
+- **Measure Up**: you see how tall one thing is; guess the height of the next. Slide your guess, lock in, and
+  see everyone's guess beside the real height. Points for being close (100 for spot on), plus 20 for the
+  closest guess. Most points after 5, 10 or 15 rounds wins. Feet or meters.
 - **TV mode** (every game): open Blueline in a TV's web browser, or on a laptop plugged into the TV, and
   tap TV mode in any game's menu. The screen shows a room code and QR code, everyone joins on their
   phones, and the game plays out on the big screen: Short Fuse letters and lives, the Four in a Row board,
   the Crazy Eights table, the chess and checkers boards, every Word Duel board (colors only), and every
   Sudoku racer's progress.
 - **Rooms**: every game can also be played with anyone who has the room code, no linking needed.
-  Word Duel and Sudoku rooms are races for up to 8.
+  Word Duel and Sudoku rooms are races for up to 8. More or Less and Measure Up can send your partner a duel
+  invite that pops up on their phone.
 - **Hurry up**: in Chess, Checkers, Four in a Row and Crazy Eights against your partner or in a room, tap
   Hurry up while it's someone else's turn (and they're in the game). They get 30 seconds; then a sensible
   move is made for them and the game moves on. The countdown shows on everyone's phone and on the TV.
@@ -71,6 +78,7 @@ node tools/test-fuse.js          # Short Fuse
 node tools/test-four.js          # Four in a Row sizes and bot levels
 node tools/test-eights.js        # Crazy Eights house rules, 2-6 players, bots
 node tools/test-checkers.js      # Checkers rules and bot levels
+node tools/test-quiz.js          # More or Less and Measure Up
 ```
 
 Word lists come from SCOWL via the `wordlist-english` package; the scripts in `tools/`

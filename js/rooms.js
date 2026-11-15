@@ -25,17 +25,30 @@
   }
   const def = type => DEFS[type] || DEFS.fuse;
 
-  async function create(type, settings, api) {
+  async function create(type, settings, api, opts = {}) {
     try {
       await O.ready();
       BL.openSheet('<h2 id="sheet-title">Making a room…</h2><div class="status-line"><span class="spinner"></span>One moment</div>', { locked: true });
       const code = await O.createRoom(myName(), settings, false, type, def(type).maxPlayers || 8);
+      const partner = opts.invite && api.partner && api.partner();
+      if (partner) {
+        await O.roomInvite(partner.pid, { game: type, code, by: O.me(), name: myName(), at: Date.now() });
+        BL.toast(`Sent ${partner.name} an invite.`);
+      }
       lobby(code, api);
     } catch (e) {
       BL.openSheet(`<h2 id="sheet-title">Couldn’t make a room</h2><p class="status-line err">${esc(err(e))}</p><div class="actions"><button type="button" class="btn" data-a="x">Close</button></div>`, { onMount: b => on(b, '[data-a=x]', () => BL.closeSheet()) });
     }
   }
 
+  // Join straight away (from an invite).
+  async function join(code, api) {
+    try {
+      const r = await O.joinRoom(code, myName());
+      if (api.openMenu && r && r.game && api.menuId && api.menuId() !== r.game) api.openMenu(r.game);
+      lobby(code, api);
+    } catch (e) { joinPrompt(code, err(e), api); }
+  }
   function joinPrompt(prefill, problem, api) {
     BL.openSheet(`
       <h2 id="sheet-title">Join a room</h2>
@@ -163,6 +176,6 @@
 
   window.BLRooms = {
     register(type, d) { DEFS[type] = d; },
-    def, create, joinPrompt, lobby, start, rematch: code => start(code, true), finish, toLobby, leave, err,
+    def, create, join, joinPrompt, lobby, start, rematch: code => start(code, true), finish, toLobby, leave, err,
   };
 })();

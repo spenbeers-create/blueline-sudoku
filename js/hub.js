@@ -16,6 +16,8 @@
     { id: 'chess', cat: 'Board', players: '2 players · TV mode' },
     { id: 'checkers', cat: 'Board', players: '2 players · TV mode' },
     { id: 'eights', cat: 'Cards', players: 'Up to 6 · TV mode' },
+    { id: 'moreless', cat: 'Quiz', players: 'Up to 8 · TV mode' },
+    { id: 'measure', cat: 'Quiz', players: 'Up to 8 · TV mode' },
   ].map(c => Object.assign({ name: GAMES[c.id] && GAMES[c.id].name, blurb: GAMES[c.id] && GAMES[c.id].blurb }, c));
   const COMING = ['Dots and Boxes', 'Sea Battle', 'Go Fish', 'Gin Rummy', 'Speed', 'Hangman', 'Word Tiles', 'Minesweeper race', '2048 race', 'Memory Match'];
 
@@ -24,7 +26,7 @@
   let presence = {};                              // uid -> { at, game }
   let net = O.configured() ? 'connecting' : 'no-config';
   let match = null;
-  let stopGames = null, stopHere = null;
+  let stopGames = null, stopHere = null, stopInvite = null, seenInvite = '';
   const seen = {};                                // gid -> last 'updated' we toasted about
   let firstLoad = true;
 
@@ -56,12 +58,21 @@
   function setPartner(p) {
     if (stopGames) { stopGames(); stopGames = null; }
     if (stopHere) { stopHere(); stopHere = null; }
+    if (stopInvite) { stopInvite(); stopInvite = null; }
     partner = p;
     BL.store.set('partner', p);
     games = {};
     if (!p) { renderHub(); return; }
     stopGames = O.watchGames(p.pid, v => { games = v; onGames(); });
     stopHere = O.watchHere(p.pid, v => { presence = v; renderHub(); if (match && !$("#play").hidden) renderMatch(); });
+    // Room invites from your partner (duels in More or Less, Measure Up and the rest).
+    stopInvite = O.watchRoomInvite(p.pid, inv => {
+      if (!inv || inv.by === O.me() || Date.now() - (inv.at || 0) > 10 * 60000) return;
+      const key = inv.code + ':' + inv.at;
+      if (seenInvite === key) return;
+      seenInvite = key;
+      BL.toast(`${inv.name || partnerName()} invited you to ${gameName(inv.game)}`, { label: 'Join', run: () => window.BLRooms.join(inv.code, menuApi) });
+    });
     O.here(p.pid, match && match.gid ? match.gid : '').catch(() => {});
     tidy();
   }
@@ -326,6 +337,7 @@
     link: () => openLink(),
     openSolo: (type, cfg) => openSolo(type, cfg),
     startFuse: cfg => startFuse(cfg),
+    startQuiz: (type, cfg) => startQuiz(type, cfg),
     startCards: cfg => startCards(cfg),
     resumeCards: () => resumeCards(),
     openRoom: (code, seat, type) => openRoom(code, seat, type),
@@ -443,6 +455,24 @@
     buildMatch(type, { local: true, from: 'menu' });
     match.state = saved.state;
     renderMatch();
+  }
+
+  // ---------------------------------------- answer-at-once games, alone
+  function startQuiz(type, cfg) {
+    const g = GAMES[type];
+    buildMatch(type, { quizSolo: true, seat: 0, from: 'menu', quizCfg: cfg });
+    let st = g.create(Object.assign({ seed: Math.random().toString(36).slice(2), players: [{ name: myName() }] }, cfg));
+    st = g.apply(st, { start: true, at: Date.now() }, 0);
+    match.state = st;
+    renderMatch();
+  }
+  function quizApply(move) {
+    const m = match;
+    if (!m) return 'No game open.';
+    if (!m.game.legal(m.state, move, m.seat)) return 'Not right now.';
+    m.state = m.game.apply(m.state, move, m.seat);
+    renderMatch();
+    return '';
   }
 
   // ---------------------------------------------------- short fuse: bots
@@ -831,7 +861,7 @@
     if (match.from === 'menu' && !(history.state && history.state.s === 'sub2')) { try { history.pushState({ s: 'sub2' }, ''); } catch (e) { /* ignore */ } }
     const ctx = {
       local: match.local, solo: match.solo, toast: BL.toast, send: submit,
-      mode: match.bot ? 'bot' : match.fuseBots || match.cardBots ? 'bots' : match.local ? 'local' : match.solo ? 'solo' : 'online',
+      mode: match.bot ? 'bot' : match.fuseBots || match.cardBots ? 'bots' : match.quizSolo ? 'practice' : match.local ? 'local' : match.solo ? 'solo' : 'online',
       thinking: () => !!(match && match.thinking),
       startLive: async () => {
         if (!match || !match.gid || !partner) return;
@@ -855,7 +885,7 @@
           <div class="actions"><button type="button" class="btn ${label === 'Resign' ? 'danger' : 'primary'} big" data-a="yes">${esc(label)}</button><button type="button" class="btn" data-a="no">Cancel</button></div>`,
         { onMount: b => { on(b, '[data-a=yes]', () => { BL.closeSheet(); fn(); }); on(b, '[data-a=no]', () => BL.closeSheet()); } });
       },
-      now: () => (match && (match.local || match.solo || match.fuseBots) ? Date.now() : O.now()),
+      now: () => (match && (match.local || match.solo || match.fuseBots || match.quizSolo) ? Date.now() : O.now()),
       partnerHere: () => !!(match && partnerOnline() && partnerOnline().game === match.gid),
       quiet: () => !!(match && match.rec && match.rec.screen),
       setDraft: text => {
@@ -919,6 +949,7 @@
     const g = m.game;
     if (m.fuseBots) return fuseApply(move, m.seat);
     if (m.cardBots) return cardApply(move, m.seat);
+    if (m.quizSolo) return quizApply(move);
     if (m.room && g.kind === 'turns') return roomSubmit(move);
     if (g.kind === 'turns') {
       if (m.rec && m.rec.status === 'over') return 'This game is over.';
@@ -986,6 +1017,13 @@
   function renderPlayHead() {
     if (!match || $('#play').hidden) return;
     const g = match.game, s = match.state, n = names(), rec = match.rec;
+    if (g.quiz) {
+      const where = match.room ? `Room ${match.room}${rec && rec.screen ? ' · on the TV' : ''}` : 'Practice';
+      $('#p-sub').textContent = `${where} · ${g.over(s) ? 'Game over' : s.rounds ? `round ${s.round} of ${s.rounds}` : `round ${s.round}`}`;
+      $('#p-sub').classList.remove('live');
+      $('#p-players').innerHTML = '';
+      return;
+    }
     if (match.type === 'fuse' && (match.room || match.fuseBots)) {
       const vn = s.variant === 'last' ? 'Last Word' : 'Pass the fuse', bots = s.players.filter(p => p.bot).length;
       $('#p-sub').textContent = match.room ? `Room ${match.room} · ${vn}${rec && rec.screen ? ' · on the TV' : ''}` : s.players.length === 1 ? 'Practice · survival' : `${vn} · ${bots} bot${bots === 1 ? '' : 's'}`;
@@ -1051,6 +1089,7 @@
     const m = match, g = m.game, box = $('#p-result');
     if (m.type === 'fuse' && window.BLMenus.fuse && window.BLMenus.fuse.renderResult(box, m)) return;
     if (m.cardBots && window.BLMenus.eights && window.BLMenus.eights.renderResult(box, m, menuApi)) return;
+    if (m.quizSolo && window.BLMenus[m.type] && window.BLMenus[m.type].renderResult(box, m, menuApi)) return;
     if (m.room && g.kind === 'race') {
       const r = m.rec || {}, n = names();
       if (r.status !== 'over') {
@@ -1185,7 +1224,7 @@
       <div class="actions">
         ${hasLook ? `<button type="button" class="btn" data-a="look">${esc(lookLabel)}</button>` : ''}
         ${active && shared && m.type !== 'chess' ? '<button type="button" class="btn danger" data-a="resign">Resign</button>' : ''}
-        ${active && (m.local || m.fuseBots || m.cardBots || m.bot) ? '<button type="button" class="btn" data-a="restart">Start over</button>' : ''}
+        ${active && (m.local || m.fuseBots || m.cardBots || m.bot || m.quizSolo) ? '<button type="button" class="btn" data-a="restart">Start over</button>' : ''}
         ${shared ? '<button type="button" class="btn" data-a="remove">Remove this game for both of you</button>' : ''}
         ${m.room ? '<button type="button" class="btn" data-a="leaveroom">Leave the room</button>' : ''}
         <button type="button" class="btn ghost" data-a="hub">${m.from === 'menu' ? 'Back to the menu' : 'Back to games'}</button>
@@ -1209,6 +1248,7 @@
           BL.closeSheet();
           if (m.fuseBots) { startFuse(m.fuseCfg); return; }
           if (m.cardBots) { startCards(m.cardCfg); return; }
+          if (m.quizSolo) { startQuiz(m.type, m.quizCfg); return; }
           if (m.bot) { startBot({ type: m.type, level: m.bot.level, seat: m.seat, opts: m.botOpts }); return; }
           if (LOCAL_SAVE.includes(m.type)) BL.store.set(m.type + 'Local', null);
           openLocal(m.type, m.from, m.type === 'four' ? { size: m.state.size } : m.type === 'eights' || m.type === 'checkers' ? { rules: m.state.rules || false } : undefined);

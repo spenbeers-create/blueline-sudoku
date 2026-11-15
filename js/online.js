@@ -238,6 +238,9 @@
   async function patchRoom(c, fields) { await ready(); await ref(`rooms/${c}`).update(Object.assign({ updated: TS() }, fields)); }
   async function roomDraft(c, value) { await ready(); await ref(`rooms/${c}/draft`).set(value); }
   async function roomHurry(c, value) { await ready(); await ref(`rooms/${c}/hurry`).set(value); }
+  // Invite your partner into a room: they get an alert with a Join button.
+  async function roomInvite(pid, value) { await ready(); await ref(`pairs/${pid}/roomInvite`).set(value); }
+  function watchRoomInvite(pid, fn) { return watch(`pairs/${pid}/roomInvite`, 'value', v => fn(v)); }
   async function roomHere(c, on) {
     await ready();
     const r = ref(`rooms/${c}/here/${uid}`);
@@ -258,7 +261,7 @@
 
   window.Online = {
     configured, ready, partners, invite, accept, setName, unlink,
-    here, watchHere, createGame, watchGames, watchGame, update, setProgress, patch, removeGame, draft, hurry, roomHurry,
+    here, watchHere, createGame, watchGames, watchGame, update, setProgress, patch, removeGame, draft, hurry, roomHurry, roomInvite, watchRoomInvite,
     createRoom, joinRoom, watchRoom, getRoom, updateRoom, roomMove, roomProg, patchRoom, roomDraft, roomHere, leaveRoom,
     me: () => uid, now, code,
   };

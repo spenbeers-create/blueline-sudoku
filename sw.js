@@ -1,6 +1,6 @@
 /* Offline support: keeps the app on the phone so it opens without internet.
    Bump VERSION on every release so phones pick up the new files. */
-const VERSION = 'blueline-1.9.0';
+const VERSION = 'blueline-2.0.0';
 const KEEP = ['blueline-runtime', 'blueline-data'];
 const SHELL = [
   './',
@@ -46,6 +46,15 @@ const SHELL = [
   './js/games/checkers-view.js',
   './js/menus/checkers-menu.js',
   './js/games/checkers-tv.js',
+  './js/games/rounds.js',
+  './js/games/moreless-data.js',
+  './js/games/moreless.js',
+  './js/games/measure-data.js',
+  './js/games/measure.js',
+  './js/games/moreless-view.js',
+  './js/games/measure-view.js',
+  './js/menus/quiz-menu.js',
+  './js/games/quiz-tv.js',
   './js/games/words-tv.js',
   './js/sudoku-room.js',
   './js/games/sudoku-tv.js',
