@@ -170,7 +170,8 @@
           e.preventDefault();
           const wasSel = selFrom === i;
           select(i);
-          drag = { from: i, x: e.clientX, y: e.clientY, moved: false, wasSel, ghost: null, id: e.pointerId };
+          // A finger wobbles a little on a tap, so it only counts as a drag past 12px.
+          drag = { from: i, x: e.clientX, y: e.clientY, moved: false, wasSel, ghost: null, id: e.pointerId, slop: e.pointerType === 'mouse' ? 5 : 12 };
           try { boardEl.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
           paint();
         } else { select(-1); paint(); }
@@ -178,7 +179,7 @@
       boardEl.addEventListener('pointermove', e => {
         if (!drag || e.pointerId !== drag.id) return;
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-        if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+        if (!drag.moved && Math.hypot(dx, dy) < drag.slop) return;
         if (!drag.moved) {
           drag.moved = true;
           const src = squares[isFlipped() ? 63 - drag.from : drag.from];

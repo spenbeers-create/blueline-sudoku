@@ -676,21 +676,29 @@
     const box = $('#p-hurry'), m = match;
     if (!box || !m || $('#play').hidden) return;
     const hi = hurryInfo(m), n = names();
-    if (!hi) { box.hidden = true; m.hurryWas = null; return; }
+    if (!hi) { box.hidden = true; box.dataset.note = ''; m.hurryWas = null; return; }
     const now = O.now();
     if (hi.active) {
+      box.dataset.note = '';
       const left = Math.max(0, Math.ceil((hi.active.at - now) / 1000)), pct = Math.max(0, Math.min(100, (100 * (hi.active.at - now)) / HURRY_MS));
       box.hidden = false;
       box.className = `p-hurry on${hi.mine ? ' mine' : ''}${left <= 10 ? ' low' : ''}`;
-      box.innerHTML = `<p>${hi.mine ? `<b>Hurry up!</b> ${left}s left, or a move is made for you.` : `<b>${esc(n[hi.slow] || 'They')}</b> has ${left}s, then a move is made for them.`}</p><i style="width:${pct}%"></i>`;
+      box.innerHTML = `<p>${hi.mine ? `<b>Hurry up!</b> ${left}s, then a move is made for you.` : `<b>${esc(n[hi.slow] || 'They')}</b> has ${left}s, then a move is made for them.`}</p><i style="width:${pct}%"></i>`;
       if (hi.mine && (!m.hurryWas || m.hurryWas.key !== hi.active.key)) { m.hurryWas = hi.active; BL.buzz && BL.buzz([90, 60, 90]); }
       return;
     }
     // My hurried turn ended: say so if it was the clock, not me, that ended it.
     if (m.hurryWas && hi.slow !== m.seat && now >= m.hurryWas.at) BL.toast('Time ran out, so a move was made for you.');
     m.hurryWas = null;
-    if (hi.mine || !slowHere(m, hi.slow)) { box.hidden = true; return; }
+    // The strip keeps its place on every turn, so the board under it never jumps
+    // (a jump right after the other player moves made taps land on the wrong square).
     box.hidden = false;
+    if (hi.mine || !slowHere(m, hi.slow)) {
+      const note = hi.mine ? 'Your move' : `Waiting for ${esc(n[hi.slow] || 'them')}…`;
+      if (box.dataset.note !== note) { box.className = 'p-hurry idle'; box.innerHTML = `<p>${note}</p>`; box.dataset.note = note; }
+      return;
+    }
+    box.dataset.note = '';
     box.className = 'p-hurry';
     box.innerHTML = `<button type="button" class="btn hurry-btn" data-a="hurry"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>Hurry ${esc(n[hi.slow] || 'them')} up</button>`;
     on(box, '[data-a=hurry]', hurryUp);

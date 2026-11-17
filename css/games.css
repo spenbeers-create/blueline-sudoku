@@ -929,11 +929,14 @@ html { overflow: hidden; }
 .tvk .tv4-side.turn { border-color: var(--blue); box-shadow: 0 0 2.4vw rgba(111, 155, 255, 0.6); }
 
 /* hurry up */
-.p-hurry { flex: none; position: relative; margin: 0 12px 6px; display: flex; justify-content: center; }
+/* One fixed height in every state, so nothing below it moves when turns change. */
+.p-hurry { flex: none; position: relative; box-sizing: border-box; height: 40px; margin: 0 12px 6px; display: flex; align-items: center; justify-content: center; }
+.p-hurry p { margin: 0; max-width: 100%; font-size: 13.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-hurry.idle p { font-weight: 600; }
 .p-hurry .hurry-btn { min-height: 34px; padding: 4px 14px; font-size: 13.5px; gap: 6px; }
 .p-hurry .hurry-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.p-hurry.on { display: block; overflow: hidden; padding: 8px 12px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); text-align: center; }
-.p-hurry.on p { margin: 0; font-size: 13.5px; color: var(--ink-2); position: relative; z-index: 1; }
+.p-hurry.on { overflow: hidden; padding: 0 12px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); text-align: center; }
+.p-hurry.on p { position: relative; z-index: 1; }
 .p-hurry.on p b { color: var(--ink); }
 .p-hurry.on i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--blue); transition: width 0.5s linear; }
 .p-hurry.on.mine { background: var(--blue); }
