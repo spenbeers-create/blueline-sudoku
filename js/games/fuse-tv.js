@@ -27,19 +27,22 @@
         { key: 'lives', label: 'Lives', value: st.lives || 3, options: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']] },
         { key: 'difficulty', label: 'Letters', value: st.difficulty || 'normal', options: [['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']] },
         { key: 'speed', label: 'Timer', value: speedOf(st), options: [['short', 'Short'], ['normal', 'Normal'], ['long', 'Long']] },
+        { key: 'longLife', label: '6+ letters', value: st.longLife === false ? 'off' : 'on', options: [['on', '+1 life'], ['off', 'Nothing']] },
       ];
     },
     setSetting(st, key, v) {
       const n = Object.assign({}, st);
       if (key === 'speed') { n.minFuse = SPEEDS[v][0]; n.limit = SPEEDS[v][1]; }
       else if (key === 'lives') { n.lives = +v; n.maxLives = Math.max(3, +v); }
+      else if (key === 'longLife') n.longLife = v === 'on';
       else n[key] = v;
       if (key === 'variant') BL.store.set('tvVariant', v);
       return n;
     },
     lobbyNote: st => (st.variant === 'last'
       ? 'Last Word: everyone gets the same letters and types a word on their phone. The last one in loses a life.'
-      : 'Pass the fuse: take turns typing a word with the letters. Whoever holds the fuse when it blows loses a life.'),
+      : 'Pass the fuse: take turns typing a word with the letters. Whoever holds the fuse when it blows loses a life.')
+      + (st.longLife === false ? '' : ' A word of 6 or more letters wins a life back, up to 3.'),
     start: code => window.BLRooms.start(code),
     unlock: () => window.BLViews.fuse.sound('unlock'),
 
@@ -132,7 +135,7 @@
         q('.tvf-seats').dataset.n = s.players.length;
 
         q('.tvf-feed').innerHTML = s.log.filter(x => x.w).slice(-7).reverse().map(x =>
-          `<span class="tvf-chip${x.bonus ? ' bonus' : ''}" style="--c:${color(x.p)}"><small>${esc(name(x.p))}</small><span>${hl(x.w, x.k)}</span>${x.bonus ? '<em>+1 life</em>' : ''}</span>`).join('');
+          `<span class="tvf-chip${x.bonus ? ' bonus' : ''}" style="--c:${color(x.p)}"><small>${esc(name(x.p))}</small><span>${hl(x.w, x.k)}</span>${x.bonus ? `<em>+${x.gained || 1} ${(x.gained || 1) > 1 ? 'lives' : 'life'}</em>` : ''}</span>`).join('');
 
         // Sounds and the boom
         const ev = s.ev != null ? s.ev : s.log.length;

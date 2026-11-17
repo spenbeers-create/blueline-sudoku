@@ -78,7 +78,12 @@
         const s = snap.state, w = input.value.trim().toLowerCase();
         if (!s.started || ctx.now() < (s.roundStart || 0)) return;
         const why = F.problem(s, w);
-        if (why) { note.textContent = why; sound('bad'); form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake'); return; }
+        if (why) {
+          note.textContent = why; sound('bad'); form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake');
+          // A word that doesn't count is wiped, so you can go straight into the next one.
+          if (w.length >= 2 && F.hasDictionary()) { input.value = ''; clearTimeout(draftT); ctx.setDraft(''); }
+          return;
+        }
         input.value = '';
         note.textContent = '';
         ctx.setDraft('');
@@ -168,7 +173,7 @@
         el.querySelector('.fz-letters').innerHTML = mineP && s.started && !over ? F.BONUS.split('').map(ch => `<span class="${mineP.letters.includes(ch) ? 'got' : ''}">${ch}</span>`).join('') : '';
         el.querySelector('.fz-log').innerHTML = s.log.slice(-8).reverse().map(x => x.boom
           ? `<span class="fz-chip boom">${esc(nameOf(x.p))} lost a life</span>`
-          : `<span class="fz-chip${x.bonus ? ' bonus' : ''}"><small>${esc(nameOf(x.p))}</small> ${hl(x.w, x.k)}${x.bonus ? ' <em>+1 life</em>' : ''}</span>`).join('');
+          : `<span class="fz-chip${x.bonus ? ' bonus' : ''}"><small>${esc(nameOf(x.p))}</small> ${hl(x.w, x.k)}${x.bonus ? ` <em>+${x.gained || 1} ${(x.gained || 1) > 1 ? 'lives' : 'life'}</em>` : ''}</span>`).join('');
         // Two-player partner games start when both are in.
         if (!s.started) {
           const both = ctx.mode === 'local' || ctx.mode === 'bots' || ctx.partnerHere();

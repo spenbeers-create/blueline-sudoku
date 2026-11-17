@@ -1,8 +1,9 @@
 /* Short Fuse: a lit fuse passes around the group. On your turn, type any real
    word containing the letters shown (like "ing") to pass it on. Each round's fuse
    has a secret length and keeps burning across turns; whoever holds it when it
-   runs out loses a life. Use every bonus letter across your words to earn a life
-   back. Last player standing wins (alone, it's a survival run).
+   runs out loses a life. A word of 6+ letters earns a life (up to 3), and so does
+   using every bonus letter across your words. Last player standing wins (alone,
+   it's a survival run).
    Last Word variant: everyone races to type a word for the same letters at once;
    the last one in (or anyone still empty-handed when time runs out) loses a life.
    Moves carry `at`, the shared clock time, so every phone agrees on the fuse. */
@@ -14,6 +15,7 @@
   const KEEP = 3500;      // every letter you type keeps it lit at least this much longer
   const MAX_HOLD = 20000; // most extra time typing can add in one turn, so nobody stalls forever
   const BONUS = 'abcdefghiklmnoprstuvwy';   // every letter except j, q, x, z
+  const LONG = 6;           // a word this long earns a life (unless the room turns it off)
   let dict = null, dictArr = null, dictP = null, prompts = null, common = null;
 
   function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return h >>> 0; }
@@ -42,16 +44,19 @@
   }
 
   function logIt(s, e) { s.log.push(e); s.ev = (s.ev || 0) + 1; }
-  // Count the word for the end-of-game table, then the bonus letters.
+  // Count the word for the end-of-game table, then any lives it earns: a long word
+  // (6+ letters) is worth a life, up to 3 (or your starting lives, if that's more),
+  // and so is finishing the bonus letters. Returns how many lives it earned.
   function addLetters(pl, w, st) {
     pl.words = (pl.words || 0) + 1;
     if (w.length > (pl.best || '').length) pl.best = w;
+    let gained = 0;
+    if (st.longLife !== false && w.length >= LONG && pl.lives < Math.max(3, st.lives || 3)) { pl.lives++; gained++; }
     const have = new Set(pl.letters.split(''));
     for (const ch of w) if (BONUS.includes(ch)) have.add(ch);
-    let bonus = false;
-    if (have.size >= BONUS.length) { have.clear(); if (pl.lives < st.maxLives) { pl.lives++; bonus = true; } }
+    if (have.size >= BONUS.length) { have.clear(); if (pl.lives < st.maxLives) { pl.lives++; gained++; } }
     pl.letters = BONUS.split('').filter(ch => have.has(ch)).join('');
-    return bonus;
+    return gained;
   }
   function applyLast(s, m, p, st) {
     s.done = s.done || {};
@@ -59,10 +64,10 @@
     if (m.word != null) {
       const w = clean(m.word);
       s.used.push(w);
-      const bonus = addLetters(s.players[p], w, st);
+      const gained = addLetters(s.players[p], w, st), bonus = gained > 0;
       s.done[p] = { w, at: m.at };
-      logIt(s, { p, w, k: s.prompt, bonus });
-      s.last = { p, w, k: s.prompt, bonus };
+      logIt(s, { p, w, k: s.prompt, bonus, gained });
+      s.last = { p, w, k: s.prompt, bonus, gained };
       const left = alive(s), waiting = left.filter(i => !s.done[i]);
       if (left.length > 1 && waiting.length === 1) losers = waiting;      // the last one loses
       if (left.length === 1 && waiting.length === 0) losers = [];          // alone: survived the round
@@ -94,7 +99,7 @@
   const logic = {
     id: 'fuse', name: 'Short Fuse', category: 'words', kind: 'turns', live: true, local: true,
     blurb: 'Type a word with the letters before the fuse burns out. Play with friends or bots.',
-    LIVES: 3, PAUSE, BONUS, GRACE, KEEP, MAX_HOLD,
+    LIVES: 3, PAUSE, BONUS, GRACE, KEEP, MAX_HOLD, LONG,
     setDictionary(words) { dict = words instanceof Set ? words : new Set(words); dictArr = null; },
     setCommon(words) { common = words; },
     hasDictionary: () => !!dict,
@@ -112,7 +117,11 @@
       const seed = String(opts.seed || Math.random());
       const lives = Math.min(5, Math.max(1, +opts.lives || 3));
       const names = Array.isArray(opts.players) ? opts.players : Array.from({ length: opts.players || 2 }, (_, i) => ({ name: `Player ${i + 1}` }));
-      const settings = { lives, maxLives: Math.max(lives, Math.min(5, +opts.maxLives || lives)), difficulty: opts.difficulty || 'normal', minFuse: Math.min(15000, Math.max(5000, +opts.minFuse || 9000)), limit: Math.min(20000, Math.max(6000, +opts.limit || 12000)) };
+      const settings = {
+        lives, maxLives: Math.max(lives, Math.min(5, +opts.maxLives || lives)), difficulty: opts.difficulty || 'normal',
+        minFuse: Math.min(15000, Math.max(5000, +opts.minFuse || 9000)), limit: Math.min(20000, Math.max(6000, +opts.limit || 12000)),
+        longLife: !(opts.longLife === false || opts.longLife === 'off'),
+      };
       const first = Math.min(names.length - 1, Math.max(0, +opts.first || 0));
       return {
         seed, settings, variant: opts.variant === 'last' ? 'last' : 'pass', done: {}, deadline: 0,
@@ -178,9 +187,9 @@
       if (m.word != null) {
         const w = clean(m.word);
         s.used.push(w);
-        const bonus = addLetters(s.players[p], w, st);
-        logIt(s, { p, w, k: s.prompt, bonus });
-        s.last = { p, w, k: s.prompt, bonus };
+        const gained = addLetters(s.players[p], w, st), bonus = gained > 0;
+        logIt(s, { p, w, k: s.prompt, bonus, gained });
+        s.last = { p, w, k: s.prompt, bonus, gained };
         s.turn = nextAlive(s, p);
         s.fuseEnd = Math.max(s.fuseEnd, m.at + GRACE);
         s.n++;

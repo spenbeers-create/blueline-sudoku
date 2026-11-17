@@ -11,8 +11,8 @@ both in the app, and take-your-turn when you're not.
 - **Chess**: full rules; six bot levels (Beginner to Master) with hints and takebacks; live games with a clock or
   take-turns games with your partner; draw offers; board themes and three piece sets.
 - **Four in a Row**: drop discs and line up four. Four bot levels (Easy to Expert) with Undo and Hint, three
-  board sizes, live or take-turns games with your partner, rooms for anyone with a code, warnings where
-  someone can win next, and your own disc colors, board and disc style.
+  board sizes, live or take-turns games with your partner, rooms for anyone with a code, and your own disc
+  colors, board and disc style. Nothing marks where someone could win next, so traps stay sneaky.
 - **Checkers**: 8×8, must-jump and multi-jumps, kings, and an optional flying-kings rule. Four bot levels
   (Easy to Expert) with Undo and Hint, live or take-turns games with your partner, rooms, pass and play,
   and your own piece colors and board.
@@ -24,8 +24,9 @@ both in the app, and take-your-turn when you're not.
   hard mode and high-contrast colors. With your partner: duels (fewer guesses wins), live races (first to solve
   wins) and words you pick for each other. Make a word and share a link anyone can play.
 - **Short Fuse**: type a word containing the letters shown to pass the lit fuse. Each fuse has a secret
-  length; whoever holds it when it burns out loses a life. Use every letter except J, Q, X and Z to win
-  a life back. Two ways to play: Pass the fuse, or Last Word (everyone types at once and the last one in
+  length; whoever holds it when it burns out loses a life. A word of 6 or more letters wins a life back
+  (up to 3; can be turned off), and so does using every letter except J, Q, X and Z. A word that doesn't
+  count is wiped so you can type the next one. Two ways to play: Pass the fuse, or Last Word (everyone types at once and the last one in
   loses a life). Play bots (three skill levels), practice alone, challenge your partner, or open a
   party room for up to 8 phones.
 - **More or Less**: higher or lower. You see how many people look up a topic on Wikipedia each month; did

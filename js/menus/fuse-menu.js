@@ -17,11 +17,11 @@
   };
   const SKILLS = { 1: 'Rookie', 2: 'Regular', 3: 'Shark' };
   const BOT_NAMES = ['Pip', 'Juno', 'Rex', 'Mabel', 'Ozzy', 'Tilly', 'Bruno'];
-  const prefs = () => Object.assign({ variant: 'pass', bots: 2, skill: 2, lives: 3, difficulty: 'normal', speed: 'normal', sound: true }, BL.store.get('fusePrefs', {}));
+  const prefs = () => Object.assign({ variant: 'pass', bots: 2, skill: 2, lives: 3, difficulty: 'normal', speed: 'normal', sound: true, longLife: true }, BL.store.get('fusePrefs', {}));
   const savePrefs = p => BL.store.set('fusePrefs', p);
   const stats = () => Object.assign({ best: 0, words: 0, longest: '', bots: { p: 0, w: 0 }, rooms: { p: 0, w: 0 }, counted: {} }, BL.store.get('fuseStats', {}));
   const settingsFrom = p => ({
-    variant: p.variant, lives: p.lives, maxLives: Math.max(3, p.lives), difficulty: p.difficulty,
+    variant: p.variant, lives: p.lives, maxLives: Math.max(3, p.lives), difficulty: p.difficulty, longLife: p.longLife !== false,
     minFuse: { short: 6000, normal: 9000, long: 12000 }[p.speed] || 9000,
     limit: { short: 8000, normal: 12000, long: 16000 }[p.speed] || 12000,
   });
@@ -96,7 +96,7 @@
     // Seats are shuffled so a different person starts each game.
     start(r, entries) {
       const order = entries.slice().sort(() => Math.random() - 0.5), st = r.settings || {};
-      let s = F.create({ seed: O.code(8), players: order.map(([, p]) => ({ name: p.name || 'Player' })), lives: st.lives, maxLives: st.maxLives, difficulty: st.difficulty, minFuse: st.minFuse, limit: st.limit, variant: st.variant });
+      let s = F.create({ seed: O.code(8), players: order.map(([, p]) => ({ name: p.name || 'Player' })), lives: st.lives, maxLives: st.maxLives, difficulty: st.difficulty, minFuse: st.minFuse, limit: st.limit, variant: st.variant, longLife: st.longLife });
       s = F.apply(s, { start: true, at: O.now() }, 0);
       r.seats = order.map(([uid]) => uid);
       r.state = JSON.stringify(s);
@@ -108,7 +108,9 @@
       <h2 id="sheet-title">How to play</h2>
       <p class="lede"><b>Pass the fuse.</b> When it’s your turn, type any real word that contains the letters on screen, in that order and together. “ING” works with “singer”. That passes the fuse on. Each fuse has a secret length and keeps burning between turns. Whoever holds it when it blows loses a life. You always get a few seconds when it reaches you, and it won’t blow while you’re typing, so you can finish your word.</p>
       <p class="lede"><b>Last Word.</b> Everyone gets the letters at once and types a word as fast as they can. The last one in loses a life, and so does anyone still without a word when time runs out.</p>
+      <p class="lede"><b>Long words.</b> A word of 6 or more letters wins you a life, up to 3. You can turn this off in Game settings.</p>
       <p class="lede"><b>Bonus life.</b> Use every letter of the alphabet except J, Q, X and Z across your words to win a life back. The letters under your box show what you still need.</p>
+      <p class="lede"><b>Wrong words.</b> If a word doesn’t count (not a real word, already played, or missing the letters), it’s wiped so you can type the next one.</p>
       <p class="lede"><b>No repeats.</b> A word can only be played once per game.</p>
       <div class="actions"><button type="button" class="btn primary big" data-a="x">Got it</button></div>`, { onMount: b => on(b, '[data-a=x]', () => BL.closeSheet()) });
   }
@@ -152,6 +154,7 @@
         <div class="pick-row"><span class="pick-label">Lives</span>${seg('fm-lives', [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], p.lives)}</div>
         <div class="pick-row"><span class="pick-label">Letters</span>${seg('fm-diff', [['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']], p.difficulty)}</div>
         <div class="pick-row"><span class="pick-label">Timer</span>${seg('fm-speed', [['short', 'Short'], ['normal', 'Normal'], ['long', 'Long']], p.speed)}</div>
+        <div class="setting"><label for="fm-long"><b>Long words earn a life</b><small>A word of 6 or more letters gives you a life back, up to 3.</small></label><span class="switch"><input type="checkbox" id="fm-long" ${p.longLife !== false ? 'checked' : ''}><span></span></span></div>
         <div class="setting"><label for="fm-sound"><b>Sounds</b><small>A pop when the fuse passes and a boom when it blows.</small></label><span class="switch"><input type="checkbox" id="fm-sound" ${p.sound ? 'checked' : ''}><span></span></span></div>
       </section>
 
@@ -169,6 +172,7 @@
     segH('fm-variant', 'variant'); segH('fm-bots', 'bots', true); segH('fm-skill', 'skill', true);
     segH('fm-lives', 'lives', true); segH('fm-diff', 'difficulty'); segH('fm-speed', 'speed');
     $('#fm-sound', el).onchange = e => { const q = prefs(); q.sound = e.target.checked; savePrefs(q); };
+    $('#fm-long', el).onchange = e => { const q = prefs(); q.longLife = e.target.checked; savePrefs(q); };
     on(el, '#fm-how', howTo);
     on(el, '#fm-create', () => R().create('fuse', settingsFrom(prefs()), api));
     on(el, '#fm-join', () => R().joinPrompt('', '', api));

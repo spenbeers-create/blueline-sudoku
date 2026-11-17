@@ -160,8 +160,6 @@ html { overflow: hidden; }
 .c4-cell.ghost i { background-color: var(--d0); opacity: 0.3; }
 .c4-grid.t1 .c4-cell.ghost i { background-color: var(--d1); }
 .c4-cell.hint:not(.p0):not(.p1) { background: rgba(245, 199, 48, 0.38); }
-.c4-cell.warn::after, .c4-cell.chance::after { content: ""; position: absolute; inset: 16%; border-radius: 50%; border: 3px solid var(--red); pointer-events: none; }
-.c4-cell.chance::after { border-color: var(--hit); border-style: dashed; }
 .c4-cell.last i { animation: c4drop 0.4s cubic-bezier(0.45, 0, 0.7, 1.15); }
 .c4-cell.win i { box-shadow: 0 0 0 3px var(--hole), 0 0 0 6px #FFFFFF; animation: c4win 0.8s ease-in-out 0.4s infinite alternate; }
 @keyframes c4drop { from { transform: translateY(calc(var(--drop, 1) * -114%)); } to { transform: translateY(0); } }

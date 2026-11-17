@@ -44,7 +44,7 @@ ok(thin.length === 0, 'thin prompts: ' + thin.slice(0, 5).join(','));
 
 // Groups: turn order skips players who are out.
 {
-  let g = fuse.create({ seed: 'grp', players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }], lives: 1 });
+  let g = fuse.create({ seed: 'grp', players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }], lives: 1, longLife: false });
   g = fuse.apply(g, { start: true, at: 0 }, 0);
   ok(g.turn === 0, 'group starts with the first player');
   g = fuse.apply(g, { word: find(g), at: 3000 }, 0);
@@ -65,9 +65,40 @@ ok(thin.length === 0, 'thin prompts: ' + thin.slice(0, 5).join(','));
   g = fuse.apply(g, { word: w, at: 1000 }, 0);
   ok(g.players[0].lives === 3 && g.players[0].letters === '' && g.last.bonus, 'all bonus letters earn a life and reset (' + w + ')');
 }
+// A word of 6+ letters earns a life, up to 3 (or the starting lives if more); off when turned off.
+{
+  const pick = (g, long) => words.find(x => x.includes(g.prompt) && !g.used.includes(x) && (long ? x.length >= 6 : x.length <= 5 && x.length > g.prompt.length));
+  let g = fuse.create({ seed: 'longw', players: [{ name: 'A' }, { name: 'B' }], lives: 1, maxLives: 3 });
+  g = fuse.apply(g, { start: true, at: 0 }, 0);
+  const short = pick(g, false);
+  if (short) { const h = fuse.apply(g, { word: short, at: 1000 }, 0); ok(h.players[0].lives === 1 && !h.last.bonus, 'a short word earns nothing (' + short + ')'); }
+  g = fuse.apply(g, { word: pick(g, true), at: 1000 }, 0);
+  ok(g.players[0].lives === 2 && g.last.bonus && g.last.gained === 1, 'a 6+ letter word earns a life (' + g.last.w + ')');
+  g = fuse.apply(g, { word: pick(g, true), at: 2000 }, 1);
+  g = fuse.apply(g, { word: pick(g, true), at: 3000 }, 0);
+  ok(g.players[0].lives === 3, 'another long word: 3 lives');
+  g = fuse.apply(g, { word: pick(g, true), at: 4000 }, 1);
+  g = fuse.apply(g, { word: pick(g, true), at: 5000 }, 0);
+  ok(g.players[0].lives === 3 && !g.last.bonus, 'never more than 3');
+  let five = fuse.create({ seed: 'longw5', players: [{ name: 'A' }, { name: 'B' }], lives: 5, maxLives: 5 });
+  five = fuse.apply(five, { start: true, at: 0 }, 0);
+  five.players[0].lives = 4;
+  five = fuse.apply(five, { word: pick(five, true), at: 1000 }, 0);
+  ok(five.players[0].lives === 5, 'with 5 starting lives, long words refill up to 5');
+  for (const off of [false, 'off']) {
+    let o = fuse.create({ seed: 'longoff', players: [{ name: 'A' }, { name: 'B' }], lives: 1, longLife: off });
+    o = fuse.apply(o, { start: true, at: 0 }, 0);
+    o = fuse.apply(o, { word: pick(o, true), at: 1000 }, 0);
+    ok(o.players[0].lives === 1 && !o.last.bonus, 'turned off (' + off + '): long words earn nothing');
+  }
+  let lw = fuse.create({ seed: 'longlast', variant: 'last', players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }], lives: 1 });
+  lw = fuse.apply(lw, { start: true, at: 0 }, 0);
+  lw = fuse.apply(lw, { word: pick(lw, true), at: lw.roundStart + 100 }, 0);
+  ok(lw.players[0].lives === 2, 'Last Word: long words earn a life too');
+}
 // Solo survival ends when your lives run out.
 {
-  let g = fuse.create({ seed: 'solo', players: [{ name: 'Me' }], lives: 1 });
+  let g = fuse.create({ seed: 'solo', players: [{ name: 'Me' }], lives: 1, longLife: false });
   g = fuse.apply(g, { start: true, at: 0 }, 0);
   g = fuse.apply(g, { word: find(g), at: 1000 }, 0);
   ok(g.turn === 0 && !fuse.over(g), 'solo: the fuse comes straight back to you');
@@ -89,7 +120,7 @@ ok(thin.length === 0, 'thin prompts: ' + thin.slice(0, 5).join(','));
 
 // Last Word: everyone answers at once; the slowest loses a life.
 {
-  let g = fuse.create({ seed: 'last', variant: 'last', players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }], lives: 1 });
+  let g = fuse.create({ seed: 'last', variant: 'last', players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }], lives: 1, longLife: false });
   g = fuse.apply(g, { start: true, at: 0 }, 0);
   const t = g.roundStart + 500;
   ok(fuse.canAct(g, 0) && fuse.canAct(g, 1) && fuse.canAct(g, 2), 'last word: everyone can answer');

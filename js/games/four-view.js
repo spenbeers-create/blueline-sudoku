@@ -1,7 +1,7 @@
 /* Four in a Row screen: both players with their disc colors and whose turn it is,
    the board in any size with drop animations, a ghost disc over the column you're
-   aiming at, optional warnings where someone can win next, and for bot games
-   Undo and Hint. Colors, board and disc style come from the Style sheet
+   aiming at, and for bot games Undo and Hint. Nothing marks where someone could
+   win next, so a trap stays a surprise. Colors, board and disc style come from the Style sheet
    (fourLook): your discs are always your color. */
 (() => {
   'use strict';
@@ -18,7 +18,7 @@
     forest: { name: 'Forest', frame: '#2B6446' }, plum: { name: 'Plum', frame: '#563874' }, slate: { name: 'Slate', frame: '#46526A' },
   };
   const STYLES = { solid: 'Solid', shiny: 'Shiny', ring: 'Ring' };
-  const look = () => Object.assign({ mine: 'blue', theirs: 'orange', board: 'night', style: 'shiny', warn: true, sound: true }, BL.store.get('fourLook', {}));
+  const look = () => Object.assign({ mine: 'blue', theirs: 'orange', board: 'night', style: 'shiny', sound: true }, BL.store.get('fourLook', {}));
   // Seat colors: your color for your seat, theirs for the other (seat 0 is "you" on one phone).
   function seatColors(viewer, local, L = look()) {
     const mine = (DISCS[L.mine] || DISCS.blue).c;
@@ -131,13 +131,7 @@
         root.className = `c4 style-${STYLES[L.style] ? L.style : 'shiny'}`;
         const over = s.winner != null, line = new Set(s.line || []);
         const mover = s.turn, canDrop = snap.canAct && !busy() && !over;
-        // Where someone could win next: red rings for danger, green for your chance.
-        const warn = new Set(), chance = new Set();
-        if (L.warn && !over) {
-          const me = local ? mover : snap.viewer;
-          G.four.threats(s, 1 - me).forEach(i => warn.add(i));
-          if (mover === me) G.four.threats(s, me).forEach(i => chance.add(i));
-        }
+        // No marks for where someone could win next: setting a trap is the game.
         const target = canDrop && hoverCol >= 0 ? G.four.landing(s, hoverCol) : -1;
         // The newest disc keeps its drop animation through repaints for a moment.
         if (s.moves.length !== seenMoves) { animAt = seenMoves >= 0 ? s.last : -1; animUntil = Date.now() + 450; }
@@ -145,8 +139,7 @@
         cells.forEach((c, i) => {
           const v = s.board[i], col = i % cols;
           c.className = 'c4-cell' + (v === '0' ? ' p0' : v === '1' ? ' p1' : '') + (line.has(i) ? ' win' : '') +
-            (i === anim ? ' last' : '') + (i === s.last ? ' newest' : '') + (v === '.' && warn.has(i) ? ' warn' : '') +
-            (v === '.' && chance.has(i) ? ' chance' : '') + (col === hintCol ? ' hint' : '') +
+            (i === anim ? ' last' : '') + (i === s.last ? ' newest' : '') + (col === hintCol ? ' hint' : '') +
             (target >= 0 && i === target * cols + col ? ' ghost' : '');
           if (i === s.last) c.style.setProperty('--drop', Math.floor(i / cols) + 1);
         });

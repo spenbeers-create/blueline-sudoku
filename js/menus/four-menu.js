@@ -53,7 +53,6 @@
       </div>
       <div class="field"><span>Disc style</span>${seg('fl-style', Object.entries(FV.STYLES), L.style)}</div>
       <div>
-        ${sw('warn', 'Warnings', 'A red ring where the other player can win next, and a green one where you can.')}
         ${sw('sound', 'Sounds', 'A clack when a disc lands, and a chime when someone wins.')}
       </div>
       <div class="actions"><button type="button" class="btn primary big" data-a="done">Done</button></div>`, {

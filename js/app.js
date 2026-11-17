@@ -17,7 +17,7 @@
   };
   const STRIKES = 3;
   const DAILY_LEVEL = ['extreme', 'easy', 'medium', 'hard', 'hard', 'expert', 'expert']; // Sunday first
-  const VERSION = '2.1.1';
+  const VERSION = '2.2.0';
 
   // ------------------------------------------------------------- storage
   const store = {
